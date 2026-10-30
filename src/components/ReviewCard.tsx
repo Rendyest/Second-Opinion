@@ -20,7 +20,9 @@ import {
   REVIEW_BACK_LABEL,
   REVIEW_CONFIRM_LABEL,
   REVIEW_CORRECT_LABEL,
+  REVIEW_IMPORTED_TAG,
   REVIEW_LOCK_LABEL,
+  REVIEW_NEEDS_REVIEW_NOTE,
   REVIEW_NOTE_WARNING,
   REVIEW_NOTE_TOO_LONG,
   REVIEW_POINTS_ONLY,
@@ -49,6 +51,8 @@ export function ReviewCard({
   noteMaxChars,
   onSubmit,
   onClose,
+  museImported = false,
+  museNeedsReview = false,
 }: {
   clip: ReviewClip;
   existingReview: StoredReview | null;
@@ -57,6 +61,9 @@ export function ReviewCard({
   noteMaxChars: number;
   onSubmit: (review: StoredReview) => void;
   onClose: () => void;
+  /** Script-imported Muse label: same behaviour, tagged source. */
+  museImported?: boolean;
+  museNeedsReview?: boolean;
 }) {
   const frames = clip.frames;
   const muse = clip.muse ?? null;
@@ -190,6 +197,8 @@ export function ReviewCard({
           {`${REVIEW_STATUS_LABEL[existingReview.status]} (${existingReview.mode === 'blind' ? 'blind' : 'assist'})`}
         </p>
         <p>{`Muse label: ${museLabelText(existingReview.muse)}`}</p>
+        {museImported && existingReview.muse && <p>{REVIEW_IMPORTED_TAG}</p>}
+        {museNeedsReview && existingReview.muse && <p>{REVIEW_NEEDS_REVIEW_NOTE}</p>}
         {existingReview.muse && <p>{`Muse reason: ${existingReview.muse.reason}`}</p>}
         <div className="button-row">
           <button type="button" onClick={onClose}>
@@ -296,6 +305,8 @@ export function ReviewCard({
       {mode === 'assist' && (
         <>
           <p>{`Muse label: ${museLabelText(muse)}`}</p>
+          {museImported && muse && <p>{REVIEW_IMPORTED_TAG}</p>}
+          {museNeedsReview && muse && <p>{REVIEW_NEEDS_REVIEW_NOTE}</p>}
           {muse && <p>{`Muse reason: ${muse.reason}`}</p>}
         </>
       )}

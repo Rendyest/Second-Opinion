@@ -43,6 +43,16 @@ export const LOCAL_FALLBACK = 'Take your time. Try slowing down.';
 
 export const COACH_BUTTON_LABEL = 'Get a tip';
 
+export const COACH_IMPORT_LABEL = 'Show a tip from a file';
+
+export const COACH_IMPORT_BAD_FILE = 'That file is not a coaching tip.';
+
+export const COACH_IMPORTED_HEADING = 'Imported tip';
+
+export const COACH_SAFETY_NOTE = 'Safety concern noted.';
+
+export const COACH_PAIN_NOTE = 'Pain check suggested.';
+
 export const TASK_NAME = 'wash your face with the face towel';
 
 export const SESSION_INTRO = 'Use your right arm to wash your face with the face towel. Take your time. Move in whatever way feels comfortable, and pause whenever you like.';

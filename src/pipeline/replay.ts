@@ -1,7 +1,16 @@
-import type { ClipSource, PoseFrame, RecordedClip, ReplayEvent } from '../contracts';
+import type { ClipSource, GateReason, PoseFrame, RecordedClip, ReplayEvent } from '../contracts';
 import { elbowFlexion, shoulderElevation, type Joint } from '../pose/angles';
 import { createPipeline, type PipelineThresholds } from './run';
 import { everyFrameCalls, fixedIntervalCalls, gatedTriggerCalls } from './policies';
+
+/** Per-frame telemetry for the /metrics overlay. In-memory only: never persisted, never sent. */
+export interface TelemetryFrame {
+  t: number;
+  ok: boolean;
+  reasons: GateReason[];
+  elbowDeg: number;
+  shoulderDeg: number;
+}
 
 function round4(v: number): number {
   return Math.round(v * 10000) / 10000;
@@ -109,6 +118,30 @@ export function runReplay(
   t: PipelineThresholds,
   opts: ReplayOptions,
 ): ReplaySummary {
+  return runReplayInner(clip, t, opts, null);
+}
+
+/**
+ * Same run as runReplay, plus a per-frame telemetry strip for the /metrics
+ * overlay. The strip is returned alongside the summary and never enters it,
+ * so exports and persistence cannot carry it.
+ */
+export function runReplayWithTelemetry(
+  clip: RecordedClip,
+  t: PipelineThresholds,
+  opts: ReplayOptions,
+): { summary: ReplaySummary; telemetry: TelemetryFrame[] } {
+  const telemetry: TelemetryFrame[] = [];
+  const summary = runReplayInner(clip, t, opts, telemetry);
+  return { summary, telemetry };
+}
+
+function runReplayInner(
+  clip: RecordedClip,
+  t: PipelineThresholds,
+  opts: ReplayOptions,
+  telemetry: TelemetryFrame[] | null,
+): ReplaySummary {
   const pipeline = createPipeline({ ...t, storedFace: clip.face ?? null });
   const frameTimesMs: number[] = [];
   const escalationTimesMs: number[] = [];
@@ -145,6 +178,15 @@ export function runReplay(
     const result = pipeline.push(frame, clip.baseline, nowMs, true);
     const computeMs = performance.now() - computeStart;
     if (!result.gate.ok) flaggedFrames += 1;
+    if (telemetry) {
+      telemetry.push({
+        t: clipFrame.t,
+        ok: result.gate.ok,
+        reasons: [...result.gate.reasons],
+        elbowDeg: elbow.deg,
+        shoulderDeg: shoulder.deg,
+      });
+    }
     if (result.cantSee.active && blockedStart === null) blockedStart = nowMs;
     if (!result.cantSee.active && blockedStart !== null) {
       blocked.push({ startMs: blockedStart, endMs: nowMs });

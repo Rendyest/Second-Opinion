@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { parseRecordedClip, type RecordedClip, type ReplayEvent } from '../contracts';
 import { config } from '../config';
-import { clipFromMockEvents, runReplay, type ReplaySummary } from '../pipeline/replay';
+import { clipFromMockEvents, runReplayWithTelemetry, type ReplaySummary, type TelemetryFrame } from '../pipeline/replay';
+import { TelemetryPlayer } from './TelemetryPlayer';
 import { LoopMetricsPanel } from './LoopMetricsPanel';
 import {
   INVALID_CLIP_MESSAGE,
@@ -17,11 +18,19 @@ import {
  */
 export function ReplaySection({ mockEvents }: { mockEvents: ReplayEvent[] }) {
   const [summary, setSummary] = useState<ReplaySummary | null>(null);
+  const [telemetry, setTelemetry] = useState<TelemetryFrame[] | null>(null);
+  const [clip, setClip] = useState<RecordedClip | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const clearReplay = () => {
+    setSummary(null);
+    setTelemetry(null);
+    setClip(null);
+  };
 
   const runClip = (clip: RecordedClip) => {
     try {
-      const result = runReplay(
+      const { summary: result, telemetry: strip } = runReplayWithTelemetry(
         clip,
         {
           gate: config.gate,
@@ -35,8 +44,11 @@ export function ReplaySection({ mockEvents }: { mockEvents: ReplayEvent[] }) {
       );
       setError(null);
       setSummary(result);
+      setTelemetry(strip);
+      setClip(clip);
     } catch {
       setError(INVALID_CLIP_MESSAGE);
+      clearReplay();
     }
   };
 
@@ -84,6 +96,7 @@ export function ReplaySection({ mockEvents }: { mockEvents: ReplayEvent[] }) {
       </div>
       {error && <p role="alert">{error}</p>}
       <LoopMetricsPanel summary={summary} />
+      {clip && telemetry && telemetry.length > 0 && <TelemetryPlayer clip={clip} telemetry={telemetry} />}
     </section>
   );
 }

@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PoseFrame, System1StateName, TopSignal } from '../contracts';
 import { config } from '../config';
-import { CHECKING_IN, COACH_BUTTON_LABEL, LOCAL_FALLBACK, TASK_NAME } from '../copy';
+import {
+  CHECKING_IN,
+  COACH_BUTTON_LABEL,
+  COACH_IMPORTED_HEADING,
+  COACH_IMPORT_BAD_FILE,
+  COACH_IMPORT_LABEL,
+  COACH_PAIN_NOTE,
+  COACH_SAFETY_NOTE,
+  LOCAL_FALLBACK,
+  TASK_NAME,
+} from '../copy';
+import { validateCoachingTip, type CoachingTip } from '../coach/coachingImport';
 import { canSendSummary, type ConsentChoices } from '../consent/consent';
 import { CONSENT_TIPS_OFF_NOTE } from '../consentCopy';
 import {
@@ -57,6 +68,10 @@ export function CoachPanel({
   const [status, setStatus] = useState<CoachStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  // Imported script tip: playback only. It never requests, never cools
+  // down, and never enters the System 2 counts.
+  const [imported, setImported] = useState<CoachingTip | null>(null);
+  const [importProblem, setImportProblem] = useState<string | null>(null);
   const [cooledUntil, setCooledUntil] = useState(0);
   const coolingTimer = useRef(0);
   const lastHandledEscalation = useRef(0);
@@ -161,6 +176,53 @@ export function CoachPanel({
       <div className="button-row">
         <button type="button" onClick={request} disabled={blocked || status === 'escalating'}>
           {summaryOn ? COACH_BUTTON_LABEL : CONSENT_TIPS_OFF_NOTE}
+        </button>
+      </div>
+      <div>
+        <label>
+          {COACH_IMPORT_LABEL}{' '}
+          <input
+            type="file"
+            accept=".json,application/json"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              setImportProblem(null);
+              void file.text().then(
+                (text) => {
+                  try {
+                    setImported(validateCoachingTip(JSON.parse(text) as unknown));
+                  } catch {
+                    setImportProblem(COACH_IMPORT_BAD_FILE);
+                  }
+                },
+                () => setImportProblem(COACH_IMPORT_BAD_FILE),
+              );
+            }}
+          />
+        </label>
+      </div>
+      {importProblem && <p role="alert">{importProblem}</p>}
+      {imported && <ImportedTipView tip={imported} onDismiss={() => setImported(null)} />}
+    </section>
+  );
+}
+
+/** Playback of one offline script tip. No requests, no cooldown, no counts. */
+export function ImportedTipView({ tip, onDismiss }: { tip: CoachingTip; onDismiss: () => void }) {
+  return (
+    <section aria-label={COACH_IMPORTED_HEADING}>
+      <h3>{COACH_IMPORTED_HEADING}</h3>
+      <p className="coach-message">{tip.cue_text}</p>
+      <p>{`Struggling: ${tip.struggling ? 'yes' : 'no'}`}</p>
+      <p>{`Signal: ${tip.signal}`}</p>
+      <p>{`Severity: ${tip.severity}`}</p>
+      {tip.safety_concern && <p>{COACH_SAFETY_NOTE}</p>}
+      {tip.ask_pain_check && <p>{COACH_PAIN_NOTE}</p>}
+      <div className="button-row">
+        <button type="button" onClick={onDismiss}>
+          Dismiss
         </button>
       </div>
     </section>

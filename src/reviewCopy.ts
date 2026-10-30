@@ -99,3 +99,9 @@ export const REVIEW_BLIND_HEADING = 'Blind agreement';
 export const REVIEW_ASSIST_HEADING = 'Assisted agreement';
 
 export const REVIEW_AGREEMENT_TITLE = 'Agreement';
+
+export const REVIEW_LABELS_PICK_LABEL = 'Import script labels';
+
+export const REVIEW_IMPORTED_TAG = 'Imported label';
+
+export const REVIEW_NEEDS_REVIEW_NOTE = 'Needs review';

@@ -4,6 +4,7 @@ import { parseRecordedClip, parseReviewBundle } from '../contracts';
 import { reviewClipFromRecorded } from '../pipeline/clip';
 import { config } from '../config';
 import { agreementByMode, formatPct, reviewCounts, type ReviewStatus, type StoredReview } from '../review/labels';
+import { attachScriptLabels, parseScriptLabels } from '../review/labelImport';
 import {
   clearReviews,
   downloadTextFile,
@@ -29,6 +30,7 @@ import {
   REVIEW_EXPORT_LABEL,
   REVIEW_IMPORT_CONFIRM,
   REVIEW_IMPORT_LABEL,
+  REVIEW_LABELS_PICK_LABEL,
   REVIEW_NO_REVIEWS,
   REVIEW_PICK_LABEL,
   REVIEW_RECORDED_NOTE,
@@ -51,11 +53,17 @@ export function ReviewPage() {
   const [reviewer, setReviewer] = useState<string>(() => loadReviewer());
   const [lastAction, setLastAction] = useState<{ clipId: string; prev: StoredReview | null } | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  // Script-imported Muse labels, by clip id. In-memory like the bundle:
+  // attaching never overwrites a bundle Muse label.
+  const [importedNeeds, setImportedNeeds] = useState<Record<string, boolean>>({});
 
   useEffect(() => subscribeLoadedBundle(() => setBundle(getLoadedBundle())), []);
 
   useEffect(() => {
-    if (bundle === null) setSelectedId(null);
+    if (bundle === null) {
+      setSelectedId(null);
+      setImportedNeeds({});
+    }
   }, [bundle]);
 
   const onPickFile = (file: File | undefined) => {
@@ -76,6 +84,36 @@ export function ReviewPage() {
             next = { version: 1 as const, source: bundleSource, clips: [reviewClipFromRecorded(recorded)] };
           }
           setLoadedBundle(next);
+          setSelectedId(null);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'That file could not be read.');
+        }
+      },
+      () => setError('That file could not be read.'),
+    );
+  };
+
+  const onImportLabels = (file: File | undefined) => {
+    if (!file || !bundle) {
+      if (!bundle) setError('Load a review bundle first, then import script labels.');
+      return;
+    }
+    setError(null);
+    void file.text().then(
+      (text) => {
+        try {
+          const parsed = parseScriptLabels(JSON.parse(text) as unknown);
+          const report = attachScriptLabels(bundle.clips, parsed);
+          setLoadedBundle({ ...bundle, clips: report.clips });
+          setImportedNeeds((prev) => ({ ...prev, ...report.needsReview }));
+          const skipped = report.skippedLabeled.length + report.skippedUnknown.length;
+          setAnnouncement(
+            `Imported ${report.attached.length} of ${parsed.length} script labels. ` +
+              `${report.skippedLabeled.length} already labeled, ` +
+              `${report.skippedUnknown.length} unknown clips, ` +
+              `${report.rejected.length} rejected. ` +
+              (skipped > 0 || report.rejected.length > 0 ? 'Nothing was overwritten.' : ''),
+          );
           setSelectedId(null);
         } catch (e) {
           setError(e instanceof Error ? e.message : 'That file could not be read.');
@@ -188,6 +226,19 @@ export function ReviewPage() {
           />
         </label>
       </div>
+      <div>
+        <label>
+          {REVIEW_LABELS_PICK_LABEL}{' '}
+          <input
+            type="file"
+            accept=".json,application/json"
+            onChange={(e) => {
+              onImportLabels(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </label>
+      </div>
       {error && <p role="alert">{error}</p>}
       {announcement && <p role="status">{announcement}</p>}
       {selected ? (
@@ -200,6 +251,8 @@ export function ReviewPage() {
           noteMaxChars={config.review.note_max_chars}
           onSubmit={submitReview}
           onClose={() => setSelectedId(null)}
+          museImported={selected.clip_id in importedNeeds}
+          museNeedsReview={importedNeeds[selected.clip_id] ?? false}
         />
       ) : (
         bundle && (

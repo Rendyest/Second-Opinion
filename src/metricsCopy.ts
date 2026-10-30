@@ -41,6 +41,15 @@ export const INVALID_CLIP_MESSAGE =
 
 export const REPLAY_SOURCE_IMPORTED = 'Imported video';
 
+export const TELEMETRY_SECTION_TITLE = 'Telemetry (dev)';
+export const TELEMETRY_PLAY_LABEL = 'Play';
+export const TELEMETRY_PAUSE_LABEL = 'Pause';
+export const TELEMETRY_STEP_BACK_LABEL = 'Step back';
+export const TELEMETRY_STEP_FORWARD_LABEL = 'Step forward';
+export const TELEMETRY_SEEK_LABEL = 'Seek';
+export const TELEMETRY_SIGNAL_OK = 'Signal good';
+export const TELEMETRY_SIGNAL_FLAGGED = 'Signal flagged';
+
 export const IMPORT_SECTION_TITLE = 'Import video (dev)';
 export const IMPORT_PICK_LABEL = 'Choose a video file';
 export const IMPORT_PARTICIPANT_LABEL = 'Participant code (anonymous, like P1 — never a real name)';
