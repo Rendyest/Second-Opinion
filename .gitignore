@@ -56,3 +56,12 @@ scripts/clips/
 scripts/masked/
 scripts/models/
 scripts/.venv/
+
+# Generated test data
+data/labels/
+data/coaching_events/
+
+# Python virtual environment and cache
+.venv/
+__pycache__/
+*.pyc
