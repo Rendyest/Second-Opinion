@@ -7,8 +7,7 @@
     "smooth_frames": 5,
     "history_frames": 15,
     "cant_see_enter_frames": 3,
-    "cant_see_e
-    xit_frames": 5
+    "cant_see_exit_frames": 5
   },
   "gate_note": "Gate ratios are scale-normalised by shoulder width (see src/pose/gate.ts): bone_length_tol is the max fractional change of a scale-invariant bone length versus the median of recent history (0.3 = 30 percent); foreshortening_min is the minimum median projected/expected arm-bone ratio over smooth_frames recent frames; history_frames is how many recent lengths the drift reference covers; cant_see_enter_frames/cant_see_exit_frames are the consecutive flagged/clean frames to enter/leave the Can't see you state.",
   "struggle": {

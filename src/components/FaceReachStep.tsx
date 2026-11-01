@@ -67,7 +67,7 @@ export function FaceReachStep() {
       live.stop();
       setPhase('idle');
       setError(
-        'Face step failed: no pose detected. Step into view so your face, shoulders and hand are visible, then try again.',
+        'Face step failed: no pose detected. Move into view so your face, shoulders and hand are visible, then try again.',
       );
     }, WARMUP_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
@@ -185,7 +185,7 @@ export function FaceReachStep() {
           <strong>Warning:</strong> {FACE_SKIPPED_NOTE}
         </p>
       )}
-      {phase === 'warming' && <p aria-live="polite">Starting camera… stand facing the camera.</p>}
+      {phase === 'warming' && <p aria-live="polite">Starting camera… sit facing the camera.</p>}
       {phase === 'anchor' && (
         <p aria-live="polite">Watching… keep your arm relaxed with your hand away from your face.</p>
       )}

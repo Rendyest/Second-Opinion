@@ -53,18 +53,18 @@ export const SESSION_PRIVACY_NOTE =
 export const FACE_STEP_TITLE = 'Touch your face';
 
 export const FACE_STEP_INTRO =
-  'Stand facing the camera with your arm relaxed and your hand away from your face.';
+  'Sit facing the camera with your arm relaxed and your hand away from your face.';
 
-export const FACE_HOLD_PROMPT = 'Now bring your hand to your forehead or cheek and hold it still.';
+export const FACE_HOLD_PROMPT = 'Now bring your hand to your forehead or cheek and hold it there.';
 
 export const FACE_ANCHOR_FAIL =
   'Face check failed: keep your face in view with your hand away, then try again.';
 
 export const FACE_HOLD_FAIL =
-  'Face check failed: bring your hand to your forehead or cheek and hold it still, then try again.';
+  'Face check failed: bring your hand to your forehead or cheek and hold it there, then try again.';
 
 export const FACE_NO_POSE_FAIL =
-  'Face check failed: no pose detected. Step into view, then try again.';
+  'Face check failed: no pose detected. Move into view, then try again.';
 
 export const FACE_PASS = 'Face step passed: reach checks are set.';
 
@@ -75,6 +75,6 @@ export const FACE_START_LABEL = 'Start face step';
 
 export const FACE_RETRY_LABEL = 'Retry face step';
 
-export const FACE_HOLD_LABEL = 'Capture hold';
+export const FACE_HOLD_LABEL = 'Calibrate hold';
 
 export const FACE_SKIP_LABEL = 'Continue without face step';
