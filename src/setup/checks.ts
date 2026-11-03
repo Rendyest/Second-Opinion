@@ -1,3 +1,5 @@
+import { CONSENT_TEXT_VERSION, type ConsentState } from '../consent/consent';
+
 /**
  * Setup checks for /setup. `evaluateSetupChecks` is pure: it takes injected
  * measurements plus thresholds, so tests never need a camera. The live
@@ -83,6 +85,105 @@ export function startBlocked(results: readonly SetupCheckResult[]): SetupCheckId
   return results
     .filter((r) => !r.advisory && !r.pass && (REQUIRED_CHECKS as readonly SetupCheckId[]).includes(r.id))
     .map((r) => r.id);
+}
+
+/**
+ * Checks that must pass before a calibration capture may start: checks 1-6
+ * (camera, upper body, face, lighting, level, speed). Check 7 (calibration)
+ * is excluded — it is the thing being gated. Single source: the capture
+ * starts consult this constant, so it can be narrowed later.
+ */
+export const CALIBRATION_BLOCKING_CHECKS: readonly SetupCheckId[] = [
+  'camera',
+  'upper_body',
+  'face',
+  'lighting',
+  'level',
+  'speed',
+];
+
+export type CalibrationBlock =
+  | { kind: 'consent' }
+  | { kind: 'stale' }
+  | { kind: 'checks'; failing: SetupCheckResult[] };
+
+/**
+ * Pure calibration gate: camera consent ticked with current text, plus every
+ * blocking check passing. Returns the blocks in notice order (consent first,
+ * then the failing checks). Missing results count as failing.
+ */
+export function calibrationBlocks(
+  consent: Pick<ConsentState, 'camera' | 'text_version'>,
+  results: readonly SetupCheckResult[],
+  blocking: readonly SetupCheckId[] = CALIBRATION_BLOCKING_CHECKS,
+): CalibrationBlock[] {
+  const blocks: CalibrationBlock[] = [];
+  if (!consent.camera) {
+    blocks.push({ kind: 'consent' });
+  } else if (consent.text_version !== CONSENT_TEXT_VERSION) {
+    blocks.push({ kind: 'stale' });
+  }
+  const failing = blocking.flatMap((id) => {
+    const found = results.find((r) => r.id === id);
+    if (found && found.pass) return [];
+    if (found) return [found];
+    return [
+      {
+        id,
+        label: SETUP_CHECK_LABEL[id],
+        pass: false,
+        advisory: false,
+        fix: 'Check this in the setup checks above, then try again.',
+      },
+    ];
+  });
+  if (failing.length > 0) blocks.push({ kind: 'checks', failing });
+  return blocks;
+}
+
+/**
+ * Capture entry seam: runs `begin` (which starts the camera and reads
+ * frames) only when nothing blocks. Returns the blocks so the caller can
+ * show the notice; activating a blocked button starts nothing.
+ */
+export function attemptCalibrationStart(
+  consent: Pick<ConsentState, 'camera' | 'text_version'>,
+  results: readonly SetupCheckResult[],
+  begin: () => void,
+  blocking: readonly SetupCheckId[] = CALIBRATION_BLOCKING_CHECKS,
+): CalibrationBlock[] {
+  const blocks = calibrationBlocks(consent, results, blocking);
+  if (blocks.length === 0) begin();
+  return blocks;
+}
+
+/** Abort a running capture when camera consent is withdrawn mid-capture. */
+export function shouldAbortCapture(capturing: boolean, cameraConsented: boolean): boolean {
+  return capturing && !cameraConsented;
+}
+
+/**
+ * Latest debounced check results, shared with the calibration steps (same
+ * publish/subscribe shape as liveStats). Null until SetupChecks publishes;
+ * calibration treats missing results as failing (default-deny).
+ */
+let publishedChecks: SetupCheckResult[] | null = null;
+const checkListeners = new Set<() => void>();
+
+export function publishSetupChecks(results: SetupCheckResult[] | null): void {
+  publishedChecks = results;
+  for (const fn of checkListeners) fn();
+}
+
+export function readSetupChecks(): SetupCheckResult[] | null {
+  return publishedChecks;
+}
+
+export function subscribeSetupChecks(fn: () => void): () => void {
+  checkListeners.add(fn);
+  return () => {
+    checkListeners.delete(fn);
+  };
 }
 
 export function evaluateSetupChecks(

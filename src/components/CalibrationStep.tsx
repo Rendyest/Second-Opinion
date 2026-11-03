@@ -10,6 +10,18 @@ import {
   unclearJoints,
   useCalibration,
 } from '../pose/calibration';
+import { useConsent } from '../consent/consent';
+import { CALIBRATION_STOPPED } from '../consentCopy';
+import {
+  attemptCalibrationStart,
+  calibrationBlocks,
+  readSetupChecks,
+  shouldAbortCapture,
+  subscribeSetupChecks,
+  type CalibrationBlock,
+  type SetupCheckResult,
+} from '../setup/checks';
+import { CalibrationBlockedNotice } from './CalibrationBlockedNotice';
 
 type Phase = 'idle' | 'warming' | 'capturing';
 
@@ -24,11 +36,28 @@ const WARMUP_TIMEOUT_MS = 30000;
  */
 export function CalibrationStep() {
   const { state, save, skip, begin } = useCalibration();
+  const { consent } = useConsent();
   const live = useLivePose();
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [blockNotice, setBlockNotice] = useState<CalibrationBlock[]>([]);
   const frameRef = useRef<PoseFrame | null>(null);
   frameRef.current = live.frame;
+  // Debounced setup-check results, shared by the SetupChecks section.
+  // Missing results count as failing: calibration starts blocked.
+  const [checkResults, setCheckResults] = useState<SetupCheckResult[] | null>(() => readSetupChecks());
+  useEffect(() => subscribeSetupChecks(() => setCheckResults(readSetupChecks())), []);
+  const blocksNow = calibrationBlocks(consent, checkResults ?? []);
+
+  // Withdrawing camera consent mid-capture aborts it: the camera stops
+  // (below), the partial samples are discarded, and nothing is stored.
+  useEffect(() => {
+    if (shouldAbortCapture(phase === 'warming' || phase === 'capturing', consent.camera)) {
+      live.stop();
+      setPhase('idle');
+      setError(CALIBRATION_STOPPED);
+    }
+  }, [phase, consent.camera, live.stop]);
 
   // Warm up: wait until the camera is live and frames are arriving before the
   // timed capture starts. The model download alone takes longer than 2 s.
@@ -96,11 +125,17 @@ export function CalibrationStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // Gated entry: without camera consent and passing checks 1-6 the
+  // camera never starts and no frame is read; the notice names the fix.
   const start = () => {
-    begin();
-    setError(null);
-    setPhase('warming');
-    live.start();
+    const blocks = attemptCalibrationStart(consent, checkResults ?? [], () => {
+      begin();
+      setError(null);
+      setBlockNotice([]);
+      setPhase('warming');
+      live.start();
+    });
+    setBlockNotice(blocks);
   };
 
   const skipCalibration = () => {
@@ -141,7 +176,12 @@ export function CalibrationStep() {
       )}
       {!busy && (
         <div className="button-row">
-          <button type="button" onClick={start}>
+          <button
+            type="button"
+            onClick={start}
+            aria-disabled={blocksNow.length > 0 ? 'true' : undefined}
+            aria-describedby={blocksNow.length > 0 ? 'calibration-blocked-notice' : undefined}
+          >
             {passed || error ? 'Retry calibration' : 'Start calibration'}
           </button>
           {!state.baseline && !state.skipped && (
@@ -151,6 +191,9 @@ export function CalibrationStep() {
           )}
         </div>
       )}
+      <div aria-live="polite" id="calibration-blocked-notice">
+        <CalibrationBlockedNotice blocks={blockNotice} />
+      </div>
       {/* The live-pose hook plays the camera stream into this element; without
           it the camera can never start ("video element not ready"). Doubling as
           a preview so the person can frame themselves. */}

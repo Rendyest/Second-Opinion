@@ -17,9 +17,9 @@ export function SetupPage() {
         guided at your own pace. You can pause or stop at any time — no explanation needed.
       </p>
       <ConsentForm consent={consent} onChange={setConsent} />
+      <SetupChecks />
       <CalibrationStep />
       <FaceReachStep />
-      <SetupChecks />
       <DeleteMyClips />
       <MockTransport />
       <p>This page makes no cloud calls.</p>

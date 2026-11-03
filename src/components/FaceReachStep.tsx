@@ -4,7 +4,19 @@ import { config } from '../config';
 import { useLivePose } from '../pose/useLivePose';
 import { statusText } from '../pose/statusText';
 import { useCalibration } from '../pose/calibration';
+import { useConsent } from '../consent/consent';
+import { CALIBRATION_STOPPED } from '../consentCopy';
 import { capturePointOffsets, minHandDistance, measureTouch, type FaceReach } from '../pose/faceReach';
+import {
+  attemptCalibrationStart,
+  calibrationBlocks,
+  readSetupChecks,
+  shouldAbortCapture,
+  subscribeSetupChecks,
+  type CalibrationBlock,
+  type SetupCheckResult,
+} from '../setup/checks';
+import { CalibrationBlockedNotice } from './CalibrationBlockedNotice';
 import {
   FACE_ANCHOR_FAIL,
   FACE_HOLD_FAIL,
@@ -38,13 +50,31 @@ const WARMUP_TIMEOUT_MS = 30000;
  */
 export function FaceReachStep() {
   const { state, saveFace, skipFace: skipFaceStored, begin } = useCalibration();
+  const { consent } = useConsent();
   const live = useLivePose();
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [blockNotice, setBlockNotice] = useState<CalibrationBlock[]>([]);
   const frameRef = useRef<PoseFrame | null>(null);
   frameRef.current = live.frame;
   const anchorRef = useRef<FaceReach['offsets'] | null>(null);
   const warmTargetRef = useRef<'anchor' | 'hold'>('anchor');
+  // Debounced setup-check results, shared by the SetupChecks section.
+  // Missing results count as failing: the face capture starts blocked.
+  const [checkResults, setCheckResults] = useState<SetupCheckResult[] | null>(() => readSetupChecks());
+  useEffect(() => subscribeSetupChecks(() => setCheckResults(readSetupChecks())), []);
+  const blocksNow = calibrationBlocks(consent, checkResults ?? []);
+
+  // Withdrawing camera consent mid-capture aborts it: the camera stops
+  // (below), the partial samples are discarded, and nothing is stored.
+  useEffect(() => {
+    if (shouldAbortCapture(phase === 'warming' || phase === 'anchor' || phase === 'hold', consent.camera)) {
+      anchorRef.current = null;
+      live.stop();
+      setPhase('idle');
+      setError(CALIBRATION_STOPPED);
+    }
+  }, [phase, consent.camera, live.stop]);
 
   // Warm up: wait until the camera is live and frames are arriving before the
   // timed capture begins.
@@ -149,20 +179,30 @@ export function FaceReachStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // Gated entries: without camera consent and passing checks 1-6 the
+  // camera never starts and no frame is read; the notice names the fix.
   const startAnchor = () => {
-    begin();
-    anchorRef.current = null;
-    setError(null);
-    warmTargetRef.current = 'anchor';
-    setPhase('warming');
-    live.start();
+    const blocks = attemptCalibrationStart(consent, checkResults ?? [], () => {
+      begin();
+      anchorRef.current = null;
+      setError(null);
+      setBlockNotice([]);
+      warmTargetRef.current = 'anchor';
+      setPhase('warming');
+      live.start();
+    });
+    setBlockNotice(blocks);
   };
 
   const startHold = () => {
-    setError(null);
-    warmTargetRef.current = 'hold';
-    setPhase('warming');
-    live.start();
+    const blocks = attemptCalibrationStart(consent, checkResults ?? [], () => {
+      setError(null);
+      setBlockNotice([]);
+      warmTargetRef.current = 'hold';
+      setPhase('warming');
+      live.start();
+    });
+    setBlockNotice(blocks);
   };
 
   const skipStep = () => {
@@ -193,7 +233,12 @@ export function FaceReachStep() {
         <>
           <p aria-live="polite">{FACE_HOLD_PROMPT}</p>
           <div className="button-row">
-            <button type="button" onClick={startHold}>
+            <button
+              type="button"
+              onClick={startHold}
+              aria-disabled={blocksNow.length > 0 ? 'true' : undefined}
+              aria-describedby={blocksNow.length > 0 ? 'face-blocked-notice' : undefined}
+            >
               {FACE_HOLD_LABEL}
             </button>
             {!state.face && !state.faceSkipped && (
@@ -207,7 +252,12 @@ export function FaceReachStep() {
       {phase === 'hold' && <p aria-live="polite">Holding… keep your hand at your face.</p>}
       {!busy && phase !== 'holdReady' && (
         <div className="button-row">
-          <button type="button" onClick={startAnchor}>
+          <button
+            type="button"
+            onClick={startAnchor}
+            aria-disabled={blocksNow.length > 0 ? 'true' : undefined}
+            aria-describedby={blocksNow.length > 0 ? 'face-blocked-notice' : undefined}
+          >
             {passed || error ? FACE_RETRY_LABEL : FACE_START_LABEL}
           </button>
           {!state.face && !state.faceSkipped && (
@@ -217,6 +267,9 @@ export function FaceReachStep() {
           )}
         </div>
       )}
+      <div aria-live="polite" id="face-blocked-notice">
+        <CalibrationBlockedNotice blocks={blockNotice} />
+      </div>
       <video
         ref={live.videoRef}
         className="calibration-preview"

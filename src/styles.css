@@ -114,7 +114,7 @@ input:focus-visible {
 }
 
 /* Checkbox rows (consent, dev recorder): the label row is the 44px target. */
-section[aria-label='Your choices'] label,
+section[aria-label='Consent'] label,
 section[aria-label='Record a clip (dev)'] label {
   display: flex;
   align-items: center;

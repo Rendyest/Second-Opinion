@@ -11,6 +11,7 @@ import {
   facingOffset,
   fpsOverWindow,
   insideEdges,
+  publishSetupChecks,
   SETUP_CONTINUE_WARNING,
   shoulderTiltDeg,
   startBlocked,
@@ -219,6 +220,12 @@ export function SetupChecks() {
     }, 500);
     return () => window.clearInterval(timer);
   }, [live.status, live.videoRef]);
+
+  // Share the debounced results with the calibration steps, which gate
+  // their captures on checks 1-6.
+  useEffect(() => {
+    publishSetupChecks(results);
+  }, [results]);
 
   const blocked = startBlocked(results);
   const start = () => {

@@ -5,11 +5,12 @@
  * demo only.
  */
 
-export const CONSENT_TITLE = 'Your choices';
+export const CONSENT_TITLE = 'Consent';
 
 export const CONSENT_CAMERA_LABEL = 'Use my camera';
 export const CONSENT_CAMERA_TEXT =
   'Your picture is used on this computer only, to find your arm and face points. ' +
+  'Calibration keeps your arm lengths and face point positions in this browser until you delete them. ' +
   'Nothing from your picture is sent anywhere. ' +
   'Your browser will also ask for permission.';
 
@@ -42,6 +43,16 @@ export const DELETE_CLIPS_LABEL = 'Delete my clips';
 export const DELETE_CLIPS_CONFIRM =
   'Delete recordings and saved measurements on this browser? Files you already downloaded stay where they are.';
 export const DELETE_CLIPS_DONE = 'Your recordings and saved measurements were deleted from this browser.';
+
+export const CALIBRATION_NEEDS_CAMERA =
+  'Calibration needs your permission to use the camera. Tick “Use my camera” above, then try again.';
+
+export const CALIBRATION_CONSENT_STALE =
+  'The consent text has changed. Please read it and tick “Use my camera” again.';
+
+export const CALIBRATION_CHECKS_LEAD = 'Calibration can start once these checks pass:';
+
+export const CALIBRATION_STOPPED = 'Calibration stopped because camera permission was withdrawn.';
 
 /**
  * Plain-language lines for each field the coach summary may carry, keyed by

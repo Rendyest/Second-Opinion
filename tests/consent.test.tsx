@@ -23,6 +23,10 @@ import {
   type ConsentState,
 } from '../src/consent/consent';
 import {
+  CALIBRATION_CHECKS_LEAD,
+  CALIBRATION_CONSENT_STALE,
+  CALIBRATION_NEEDS_CAMERA,
+  CALIBRATION_STOPPED,
   CONSENT_CAMERA_TEXT,
   CONSENT_CLIPS_TEXT,
   CONSENT_DEMO_NOTE,
@@ -185,6 +189,10 @@ describe('consent copy is truthful and check-safe', () => {
       CONSENT_MASKING_NOTE,
       CONSENT_DEMO_NOTE,
       DELETE_CLIPS_LABEL,
+      CALIBRATION_NEEDS_CAMERA,
+      CALIBRATION_CONSENT_STALE,
+      CALIBRATION_CHECKS_LEAD,
+      CALIBRATION_STOPPED,
       // DELETE_CLIPS_CONFIRM and DELETE_CLIPS_DONE are verbatim user copy
       // ("saved measurements" names what is deleted), so they are exempt
       // from the counters guard and checked separately below.
