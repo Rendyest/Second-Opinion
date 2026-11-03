@@ -76,6 +76,10 @@ export interface AppConfig {
     live_emit_hz: number;
     dev_controls: boolean;
   };
+  review: {
+    note_max_chars: number;
+    blind_default: boolean;
+  };
   baseline: {
     fixed_interval_s: number;
   };
@@ -250,6 +254,11 @@ function isBaseline(v: unknown): v is AppConfig['baseline'] {
   return isPlainObject(v) && isNum(v['fixed_interval_s']);
 }
 
+function isReview(v: unknown): v is AppConfig['review'] {
+  if (!isPlainObject(v)) return false;
+  return isPositiveInt(v['note_max_chars']) && typeof v['blind_default'] === 'boolean';
+}
+
 export function isAppConfig(v: unknown): v is AppConfig {
   if (!isPlainObject(v)) return false;
   return (
@@ -261,6 +270,7 @@ export function isAppConfig(v: unknown): v is AppConfig {
     isMetrics(v['metrics']) &&
     isSetup(v['setup']) &&
     isBaseline(v['baseline']) &&
+    isReview(v['review']) &&
     isUi(v['ui'])
   );
 }

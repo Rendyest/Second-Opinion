@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useMockStream } from '../mock/MockStreamContext';
+import { config } from '../config';
 
 function streamLabel(status: string, cursor: number, total: number, playing: boolean): string {
   if (status === 'loading') return 'Mock stream: loading…';
@@ -24,9 +25,11 @@ export function AppNav() {
           <li>
             <NavLink to="/metrics">Metrics</NavLink>
           </li>
-          <li>
-            <NavLink to="/review">Review</NavLink>
-          </li>
+          {config.ui.dev_controls && (
+            <li>
+              <NavLink to="/review">Review</NavLink>
+            </li>
+          )}
           <li>
             <NavLink to="/validation">Validation</NavLink>
           </li>

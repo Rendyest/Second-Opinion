@@ -41,7 +41,8 @@ export const CONSENT_TIPS_OFF_NOTE = 'Tips are off. Turn on the cloud summary ch
 
 export const DELETE_CLIPS_LABEL = 'Delete my clips';
 export const DELETE_CLIPS_CONFIRM =
-  'Delete recordings and saved measurements on this browser? Files you already downloaded stay where they are.';
+  'Delete recordings, saved measurements and any loaded review clips on this browser? ' +
+  'Your saved reviews stay. Files you already downloaded stay where they are.';
 export const DELETE_CLIPS_DONE = 'Your recordings and saved measurements were deleted from this browser.';
 
 export const CALIBRATION_NEEDS_CAMERA =

@@ -134,6 +134,33 @@ input[type='file'] {
   font-size: 1.05rem;
 }
 
+/* Review card label rows (radio/checkbox/note): the label row is the 44px target. */
+section[aria-label='Review card'] label,
+section[aria-label='Review queue'] label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+section[aria-label='Review card'] textarea {
+  font-size: 1.05rem;
+}
+
+input[type='range'] {
+  min-height: 44px;
+}
+
+section[aria-label='Review queue'] svg {
+  width: 96px;
+  height: 96px;
+}
+
+section[aria-label='Review card'] svg {
+  width: min(100%, 420px);
+  height: auto;
+}
+
 /* Emergency stop: persistent and larger than the other session controls. */
 .emergency-stop {
   font-size: 1.25rem;

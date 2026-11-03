@@ -371,11 +371,12 @@ describe('fps lives outside the session view', () => {
     }
   });
 
-  it('no session-facing source file imports replay, recorder, or loop metrics modules', () => {
+  it('no session-facing source file imports replay, recorder, loop metrics, or review modules', () => {
     // The shared per-frame pipeline (pipeline/run) is the one exception: the
     // live session and clip replay both call it. Everything replay-shaped —
     // the replay runner, its policies, the recorder, the results panel, and
-    // metrics copy — stays off the session route.
+    // metrics copy — stays off the session route. So does the review bundle
+    // (/review only, behind dev controls).
     const sessionFacing = [
       '../src/pages/SessionPage.tsx',
       '../src/components/AngleReadout.tsx',
@@ -391,7 +392,7 @@ describe('fps lives outside the session view', () => {
     for (const rel of sessionFacing) {
       const src = readFileSync(new URL(rel, import.meta.url), 'utf-8');
       expect(src, `${rel} must stay off the session route`).not.toMatch(
-        /pipeline\/replay|pipeline\/policies|pipeline\/clip|LoopMetricsPanel|ClipRecorder|ReplaySection|metricsCopy/,
+        /pipeline\/replay|pipeline\/policies|pipeline\/clip|LoopMetricsPanel|ClipRecorder|ReplaySection|metricsCopy|review\/|reviewCopy|ReviewBundle|ReviewClip/,
       );
     }
   });

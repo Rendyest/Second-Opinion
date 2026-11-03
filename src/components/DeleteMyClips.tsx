@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { clearCalibration, useCalibration } from '../pose/calibration';
 import { clearAllBuffers } from '../recording/clipBuffer';
+import { clearLoadedBundle } from '../review/store';
 import {
   DELETE_CLIPS_CONFIRM,
   DELETE_CLIPS_DONE,
@@ -8,9 +9,10 @@ import {
 } from '../consentCopy';
 
 /**
- * "Delete my clips": clears in-memory clips and recording buffers plus the
- * stored calibration and face data. Consent choices stay. Confirms first
- * with a native dialog; the result line has no digits.
+ * "Delete my clips": clears in-memory clips and recording buffers, any
+ * loaded review bundle, plus the stored calibration and face data. Consent
+ * choices and saved reviews stay. Confirms first with a native dialog; the
+ * result line has no digits.
  */
 export function DeleteMyClips() {
   const { refresh } = useCalibration();
@@ -19,6 +21,7 @@ export function DeleteMyClips() {
 
   const confirmDelete = () => {
     clearAllBuffers();
+    clearLoadedBundle();
     clearCalibration();
     refresh();
     setDeleted(true);

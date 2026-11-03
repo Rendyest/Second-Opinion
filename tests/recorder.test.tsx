@@ -33,7 +33,7 @@ describe('recorded clips', () => {
   it('produces only the allowed fields with numbers rounded to 4 decimals', () => {
     const clip = goodClip();
     expect(Object.keys(clip).sort()).toEqual(
-      ['baseline', 'config_used', 'face', 'fps', 'frames', 'labels', 'name', 'source', 'version'].sort(),
+      ['baseline', 'config_used', 'consent', 'face', 'fps', 'frames', 'labels', 'name', 'source', 'version'].sort(),
     );
     expect(clip.frames[0].joints['r_shoulder']).toEqual({ x: 0.6002, y: 0.5, conf: 0.9124 });
     expect(clip.frames[0].t).toBe(0);

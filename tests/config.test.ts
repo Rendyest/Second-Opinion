@@ -44,6 +44,7 @@ const GOOD_CONFIG = {
   },
   coach: { timeout_ms: 10000, cooldown_ms: 60000, max_reply_chars: 300, summary_window_s: 10 },
   metrics: { interval_s: 2, coverage_window_s: 3, record_max_s: 120 },
+  review: { note_max_chars: 200, blind_default: true },
   setup: {
     check_enter_frames: 3,
     check_exit_frames: 5,
@@ -345,6 +346,26 @@ describe('config setup section', () => {
     ).toBe(false);
     expect(
       isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, fps_min: 0 } }),
+    ).toBe(false);
+  });
+});
+
+describe('config review section', () => {
+  it('rejects a config missing the review section', () => {
+    const { review: _review, ...rest } = GOOD_CONFIG;
+    void _review;
+    expect(isAppConfig(rest)).toBe(false);
+  });
+
+  it('rejects a non-positive note cap', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, review: { ...GOOD_CONFIG.review, note_max_chars: 0 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-boolean blind default', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, review: { ...GOOD_CONFIG.review, blind_default: 'yes' } }),
     ).toBe(false);
   });
 });

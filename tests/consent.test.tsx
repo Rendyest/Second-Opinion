@@ -273,7 +273,7 @@ describe('delete my clips', () => {
 
     const html = renderToStaticMarkup(<DeleteMyClips />);
     expect(html).toContain('Delete my clips');
-    expect(html).toContain('Delete recordings and saved measurements');
+    expect(html).toContain('Delete recordings, saved measurements and any loaded review clips');
 
     // The confirmed path: buffers plus calibration and face data go away.
     const buffer = new ClipBuffer();

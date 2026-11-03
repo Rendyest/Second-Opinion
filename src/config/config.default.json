@@ -73,5 +73,9 @@
     "readout_hz": 5,
     "live_emit_hz": 30,
     "dev_controls": false
+  },
+  "review": {
+    "note_max_chars": 200,
+    "blind_default": true
   }
 }

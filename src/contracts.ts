@@ -175,6 +175,8 @@ export interface RecordedClip {
   labels?: ClipLabel[];
   /** Point marks (clip-relative seconds) from "Mark this moment". Never any media. */
   marks?: number[];
+  /** Written by the recorders after the recording-consent gate. */
+  consent?: { recording: boolean };
 }
 
 const CLIP_KEYS: readonly string[] = [
@@ -188,6 +190,7 @@ const CLIP_KEYS: readonly string[] = [
   'config_used',
   'labels',
   'marks',
+  'consent',
 ];
 
 /** True for any string that smells like embedded image data. */
@@ -226,7 +229,7 @@ function isClipLabel(v: unknown): v is ClipLabel {
   return (v['start_s'] as number) >= 0 && (v['end_s'] as number) >= (v['start_s'] as number);
 }
 
-function isClipBaseline(v: unknown): v is NonNullable<RecordedClip['baseline']> {
+export function isClipBaseline(v: unknown): v is NonNullable<RecordedClip['baseline']> {
   if (!isRecord(v)) return false;
   return (
     isFiniteNum(v['upperArm']) &&
@@ -238,7 +241,7 @@ function isClipBaseline(v: unknown): v is NonNullable<RecordedClip['baseline']> 
   );
 }
 
-function isClipFace(v: unknown): v is NonNullable<RecordedClip['face']> {
+export function isClipFace(v: unknown): v is NonNullable<RecordedClip['face']> {
   if (!isRecord(v)) return false;
   const offsets = v['offsets'];
   if (!isRecord(offsets) || Object.keys(offsets).length === 0) return false;
@@ -279,7 +282,155 @@ export function isRecordedClip(v: unknown): v is RecordedClip {
       return false;
     }
   }
+  if (v['consent'] !== undefined) {
+    const consent = v['consent'];
+    if (!isRecord(consent) || Object.keys(consent).length !== 1 || typeof consent['recording'] !== 'boolean') {
+      return false;
+    }
+  }
   return !containsImageData(v);
+}
+
+/** Display severities for a Muse label, ordered for distance. */
+export type MuseSeverity = 'none' | 'mild' | 'moderate' | 'severe';
+
+const MUSE_SEVERITIES: readonly string[] = ['none', 'mild', 'moderate', 'severe'];
+
+/** Optional machine label on a review clip. Never invented by the UI. */
+export interface MuseLabel {
+  struggling: boolean;
+  severity: MuseSeverity;
+  error_types: string[];
+  reason: string;
+}
+
+/**
+ * One clip inside a review bundle. Like a recorded clip but with a stable
+ * clip_id instead of a name (the recorder's name is never displayed), full
+ * pose_frame entries, and mandatory recording consent.
+ */
+export interface ReviewClip {
+  clip_id: string;
+  fps: number;
+  frames: PoseFrame[];
+  baseline: NonNullable<RecordedClip['baseline']> | null;
+  face: NonNullable<RecordedClip['face']> | null;
+  marks?: number[];
+  consent: { recording: boolean };
+  muse?: MuseLabel;
+}
+
+/** In-memory review bundle: clips only, never results. */
+export interface ReviewBundle {
+  version: 1;
+  source: 'recorded' | 'synthetic';
+  clips: ReviewClip[];
+}
+
+export const CLIP_ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
+
+export function isMuseLabel(v: unknown): v is MuseLabel {
+  if (!isRecord(v)) return false;
+  const keys = Object.keys(v);
+  if (keys.length !== 4 || !keys.includes('struggling') || !keys.includes('severity')) return false;
+  if (!keys.includes('error_types') || !keys.includes('reason')) return false;
+  if (typeof v['struggling'] !== 'boolean') return false;
+  if (typeof v['severity'] !== 'string' || !MUSE_SEVERITIES.includes(v['severity'])) return false;
+  if (!Array.isArray(v['error_types']) || !(v['error_types'] as unknown[]).every((e) => typeof e === 'string')) {
+    return false;
+  }
+  const reason = v['reason'];
+  return typeof reason === 'string' && reason.length > 0 && reason.length <= 2000;
+}
+
+const REVIEW_CLIP_KEYS: readonly string[] = ['clip_id', 'fps', 'frames', 'baseline', 'face', 'consent'];
+const REVIEW_CLIP_OPTIONAL: readonly string[] = ['marks', 'muse'];
+
+export function isReviewClip(v: unknown): v is ReviewClip {
+  if (!isRecord(v)) return false;
+  for (const key of Object.keys(v)) {
+    if (!REVIEW_CLIP_KEYS.includes(key) && !REVIEW_CLIP_OPTIONAL.includes(key)) return false;
+  }
+  for (const key of REVIEW_CLIP_KEYS) {
+    if (!(key in v)) return false;
+  }
+  if (typeof v['clip_id'] !== 'string' || !CLIP_ID_RE.test(v['clip_id'] as string)) return false;
+  if (!isFiniteNum(v['fps']) || (v['fps'] as number) <= 0) return false;
+  if (!Array.isArray(v['frames']) || (v['frames'] as unknown[]).length === 0) return false;
+  if (!(v['frames'] as unknown[]).every(isPoseFrame)) return false;
+  const baseline = v['baseline'];
+  if (baseline !== null && !isClipBaseline(baseline)) return false;
+  const face = v['face'];
+  if (face !== null && !isClipFace(face)) return false;
+  if (v['marks'] !== undefined) {
+    if (
+      !Array.isArray(v['marks']) ||
+      !(v['marks'] as unknown[]).every((m) => isFiniteNum(m) && (m as number) >= 0)
+    ) {
+      return false;
+    }
+  }
+  const consent = v['consent'];
+  if (!isRecord(consent) || Object.keys(consent).length !== 1 || typeof consent['recording'] !== 'boolean') {
+    return false;
+  }
+  if (v['muse'] !== undefined && !isMuseLabel(v['muse'])) return false;
+  return true;
+}
+
+export function isReviewBundle(v: unknown): v is ReviewBundle {
+  if (!isRecord(v)) return false;
+  for (const key of Object.keys(v)) {
+    if (key !== 'version' && key !== 'source' && key !== 'clips') return false;
+  }
+  if (v['version'] !== 1) return false;
+  if (v['source'] !== 'recorded' && v['source'] !== 'synthetic') return false;
+  if (!Array.isArray(v['clips'])) return false;
+  const seen = new Set<string>();
+  for (const clip of v['clips'] as unknown[]) {
+    if (!isReviewClip(clip)) return false;
+    if (seen.has((clip as ReviewClip).clip_id)) return false;
+    seen.add((clip as ReviewClip).clip_id);
+  }
+  return !containsImageData(v);
+}
+
+/** Parse a picked review-bundle file; throws a plain-worded message on failure. */
+export function parseReviewBundle(v: unknown): ReviewBundle {
+  if (!isRecord(v) || v['version'] !== 1 || (v['source'] !== 'recorded' && v['source'] !== 'synthetic')) {
+    throw new Error('That file is not a valid review bundle. It must hold version 1, a source and a clips array.');
+  }
+  for (const key of Object.keys(v)) {
+    if (key !== 'version' && key !== 'source' && key !== 'clips') {
+      throw new Error('That file is not a valid review bundle. It must hold version 1, a source and a clips array.');
+    }
+  }
+  if (!Array.isArray(v['clips'])) {
+    throw new Error('That file is not a valid review bundle. It must hold version 1, a source and a clips array.');
+  }
+  const seen = new Set<string>();
+  const clips = (v['clips'] as unknown[]).map((clip, i) => {
+    if (!isReviewClip(clip)) {
+      throw new Error(`That file is not a valid review bundle. Clip ${i} is not a valid review clip.`);
+    }
+    if (clip.consent.recording !== true) {
+      throw new Error("This clip has no recorded consent, so it can't be loaded for review.");
+    }
+    if (seen.has(clip.clip_id)) {
+      throw new Error(`That file is not a valid review bundle. Two clips share the id "${clip.clip_id}".`);
+    }
+    seen.add(clip.clip_id);
+    return clip;
+  });
+  const bundle: ReviewBundle = {
+    version: 1,
+    source: v['source'] === 'synthetic' ? 'synthetic' : 'recorded',
+    clips,
+  };
+  if (containsImageData(bundle)) {
+    throw new Error('That file is not a valid review bundle. It must not contain image data.');
+  }
+  return bundle;
 }
 
 /** Parse pasted or picked clip JSON; throws a plain-worded message on failure. */
