@@ -91,7 +91,6 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
     trackerRef.current?.reset();
     cantSeeRef.current?.reset();
     detectorRef.current?.reset();
-    publishReachDetails(null);
     lastPushedRef.current = null;
     setCantSee({ active: false, fixLine: null });
     setLiveSystem(null);
@@ -121,16 +120,6 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
     wasCantSee.current = nextCantSee.active;
     if (source === 'live') {
       const next = detector.push(merged, Date.now());
-      // Dev-only reach readout for /metrics; never rendered on /session.
-      const reach = detector.snapshot();
-      publishReachDetails({
-        rawDist: reach.rawDist,
-        smoothDist: reach.lastDist,
-        zoneRadius: reach.zoneRadius,
-        rise: reach.rise,
-        phase: reach.phase,
-        topSignal: reach.topSignal,
-      });
       if (next) {
         setLiveSystem(next);
         if (next.escalate) setEscalationId((id) => id + 1);
@@ -157,7 +146,7 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
   const topSignal = source === 'mock' ? mockState?.top_signal : liveSystem?.top_signal;
 
   return (
-    <div>      <h1>Session — wash your face with the cloth</h1>
+    <div>      <h1>Session — wash your face with the face towel</h1>
       <p>
         {SESSION_INTRO} {SESSION_PRIVACY_NOTE}
       </p>
