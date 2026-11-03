@@ -8,7 +8,7 @@ export function SetupPage() {
     <div>
       <h1>Setup</h1>
       <p>
-        Welcome. When sessions begin, the task will be <strong>wash your face with the cloth</strong>,
+        Welcome. When sessions begin, the task will be <strong>wash your face with the face towel</strong>,
         guided at your own pace. You can pause or stop at any time — no explanation needed.
       </p>
       <CalibrationStep />

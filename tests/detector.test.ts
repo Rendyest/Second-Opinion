@@ -29,9 +29,12 @@ const T = {
   stall_speed: 0.2,
   stall_s: 1.0,
   shoulder_hike_frac: 0.15,
+  hike_hold_frames: 5,
   start_motion_deg: 5,
   start_motion_dist: 0.1,
 };
+const PASS_THROUGH = { hand_min_cutoff: 1e9, hand_beta: 0, shoulder_alpha: 1 };
+const REAL_SMOOTHING = { hand_min_cutoff: 1.0, hand_beta: 0.05, shoulder_alpha: 0.2 };
 const FACE = {
   reach_margin: 0.5,
   zone_min: 0.25,
@@ -60,10 +63,13 @@ const STORED = {
 const OPTS: DetectorOptions = {
   struggle: T,
   face: FACE,
+  smoothing: PASS_THROUGH,
   visMin: 0.5,
   cooldownMs: 60000,
   stored: STORED,
 };
+/** Real smoothing values for the input-smoothing tests. */
+const SMOOTH: DetectorOptions = { ...OPTS, smoothing: REAL_SMOOTHING };
 const RADIUS = 0.3;
 
 function joint(x: number, y: number, conf = 0.9): Joint2D {
@@ -306,8 +312,8 @@ describe('reach-and-hold detector', () => {
   });
 
   /** Rest, rep start, one approach frame; the probe frame decides. */
-  function startedDetector(): ReturnType<typeof createSystem1Detector> {
-    const detector = createSystem1Detector(OPTS);
+  function startedDetector(opts: DetectorOptions = OPTS): ReturnType<typeof createSystem1Detector> {
+    const detector = createSystem1Detector(opts);
     detector.push(frame(0, { elbow: 150, index: FAR }), 0);
     detector.push(frame(1, { elbow: 150, index: FAR }), 1000);
     detector.push(frame(2, { elbow: 144, index: { x: 0.5, y: 0.6 } }), 2000);
@@ -530,16 +536,106 @@ describe('reach-and-hold detector', () => {
   it('a shoulder hike during the reach escalates with compensation', () => {
     const detector = startedDetector();
     let latest = null;
+    // Moving hand (never stalled), shoulder held high: compensation needs
+    // hike_hold_frames consecutive scored hops before it scores above 0.
     const spots = [
-      [4, 120, { x: 0.5, y: 0.5 }, 0.46],
-      [4.5, 120, { x: 0.5, y: 0.5 }, 0.46],
-      [5, 120, { x: 0.5, y: 0.5 }, 0.46],
+      [4, 120, { x: 0.325, y: 0.28 }, 0.46],
+      [4.5, 120, { x: 0.3, y: 0.28 }, 0.46],
+      [5, 120, { x: 0.325, y: 0.28 }, 0.46],
+      [5.5, 120, { x: 0.3, y: 0.28 }, 0.46],
+      [6, 120, { x: 0.325, y: 0.28 }, 0.46],
+      [6.5, 120, { x: 0.3, y: 0.28 }, 0.46],
+      [7, 120, { x: 0.325, y: 0.28 }, 0.46],
+      [7.5, 120, { x: 0.3, y: 0.28 }, 0.46],
     ] as Array<[number, number, { x: number; y: number }, number]>;
     for (const [t, elbow, index, sy] of spots) {
       latest = detector.push(frame(t, { elbow, index, shoulderY: sy }), t * 1000) ?? latest;
     }
     expect(latest?.state).toBe('struggling');
     expect(latest?.top_signal).toBe('compensation');
+  });
+
+  it('hand jitter around a fixed point never changes the at-face result', () => {
+    const detector = startedDetector(SMOOTH);
+    const states: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      const t = 4 + i * 0.5;
+      const y = i % 2 === 0 ? 0.305 : 0.315;
+      const next = detector.push(frame(t, { elbow: 65, index: { x: 0.4, y } }), t * 1000);
+      if (next) states.push(next.state);
+    }
+    // Raw distances swing 0.125..0.175 around the 0.15 cheek distance; the
+    // smoothed distance stays within 0.02 of it and never leaves the zone.
+    expect(detector.snapshot().phase).toBe('hold');
+    expect(Math.abs((detector.snapshot().lastDist ?? NaN) - 0.15)).toBeLessThan(0.02);
+    expect(states).not.toContain('struggling');
+  });
+
+  it('a real 0.1 move passes through smoothing within a few frames', () => {
+    const detector = createSystem1Detector(SMOOTH);
+    detector.push(frame(0, { elbow: 150, index: { x: 0.5, y: 0.9 } }), 0);
+    detector.push(frame(1, { elbow: 150, index: { x: 0.5, y: 0.9 } }), 1000);
+    detector.push(frame(2, { elbow: 150, index: { x: 0.5, y: 0.9 } }), 2000);
+    const before = detector.snapshot();
+    detector.push(frame(3, { elbow: 150, index: { x: 0.5, y: 0.8 } }), 3000);
+    detector.push(frame(4, { elbow: 150, index: { x: 0.5, y: 0.8 } }), 4000);
+    const after = detector.snapshot();
+    const step = Math.abs((after.rawDist ?? NaN) - (before.lastDist ?? NaN));
+    expect(step).toBeGreaterThan(0);
+    expect(Math.abs((after.lastDist ?? NaN) - (after.rawDist ?? NaN))).toBeLessThan(0.15 * step);
+  });
+
+  it('one shoulder blip never scores compensation, a sustained rise does', () => {
+    const detector = startedDetector(SMOOTH);
+    const tops: Array<string | undefined> = [];
+    let latest = null;
+    const spots = [
+      [4, 0.5],
+      [4.5, 0.5],
+      [5, 0.45],
+      [5.5, 0.5],
+      [6, 0.5],
+      [6.5, 0.5],
+    ] as Array<[number, number]>;
+    for (const [t, sy] of spots) {
+      // Wide oscillation: smoothed hand speed stays above the stall band.
+      const x = t % 1 === 0 ? 0.25 : 0.35;
+      latest =
+        detector.push(frame(t, { elbow: 120, index: { x, y: 0.28 }, shoulderY: sy }), t * 1000) ??
+        latest;
+      if (latest?.top_signal !== undefined) tops.push(latest.top_signal);
+    }
+    expect(tops).not.toContain('compensation');
+    expect(latest?.state).not.toBe('struggling');
+
+    const sustained = startedDetector(SMOOTH);
+    let held: System1State | null = null;
+    for (let i = 0; i < 14; i++) {
+      const t = 4 + i * 0.25;
+      // Wide oscillation: smoothed hand speed stays above the stall band.
+      const x = i % 2 === 0 ? 0.25 : 0.35;
+      held =
+        sustained.push(frame(t, { elbow: 120, index: { x, y: 0.28 }, shoulderY: 0.46 }), t * 1000) ??
+        held;
+    }
+    expect(held?.state).toBe('struggling');
+    expect(held?.top_signal).toBe('compensation');
+  });
+
+  it('smoothing resets after a tracking gap', () => {
+    const detector = createSystem1Detector(SMOOTH);
+    detector.push(frame(0, { elbow: 150, index: { x: 0.5, y: 0.9 } }), 0);
+    detector.push(frame(0.5, { elbow: 150, index: { x: 0.5, y: 0.8 } }), 500);
+    const lagging = detector.snapshot();
+    // The smoothed point trails the raw point after a fast move.
+    expect(lagging.lastDist).not.toBe(lagging.rawDist);
+    detector.resetWindow();
+    expect(detector.snapshot().phase).toBe('rest');
+    expect(detector.snapshot().lastDist).toBeNull();
+    detector.push(frame(1, { elbow: 150, index: { x: 0.5, y: 0.8 } }), 1000);
+    const fresh = detector.snapshot();
+    // Fresh smoothing starts exactly on the raw point: no lag.
+    expect(fresh.lastDist).toBe(fresh.rawDist);
   });
 
   it('yields no score until the minimum clean frames arrive', () => {

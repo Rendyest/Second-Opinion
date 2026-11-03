@@ -43,14 +43,14 @@ export const LOCAL_FALLBACK = 'Take your time. Try slowing down.';
 
 export const COACH_BUTTON_LABEL = 'Get a tip';
 
-export const TASK_NAME = 'wash your face with the cloth';
+export const TASK_NAME = 'wash your face with the face towel';
 
-export const SESSION_INTRO = 'Take your time. Move in whatever way feels comfortable, and pause whenever you like.';
+export const SESSION_INTRO = 'Use your right arm to wash your face with the face towel. Take your time. Move in whatever way feels comfortable, and pause whenever you like.';
 
 export const SESSION_PRIVACY_NOTE =
-  'Only a short summary of your movement is sent to get a tip. No pictures or video leave this computer.';
+  'Only a short summary of your movement is captured. No pictures or video leave this computer.';
 
-export const FACE_STEP_TITLE = 'Touch your face';
+export const FACE_STEP_TITLE = 'Face Calibration';
 
 export const FACE_STEP_INTRO =
   'Sit facing the camera with your arm relaxed and your hand away from your face.';

@@ -2,6 +2,7 @@ import type { PoseFrame, System1State, System1StateName, TopSignal } from '../co
 import type { AppConfig } from '../config';
 import { loadFaceReach } from '../pose/calibration';
 import {
+  handPoint,
   isAtFace,
   livePointOffsets,
   minHandDistance,
@@ -10,6 +11,7 @@ import {
   type FaceReach,
   type PointOffsets,
 } from '../pose/faceReach';
+import { median } from '../pose/gate';
 
 /**
  * System 1 behind an interface: a hand-to-face time series plus gate output
@@ -47,6 +49,35 @@ export interface WindowScore {
 
 function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v));
+}
+
+/**
+ * Adaptive exponential smoothing (One Euro style): the cutoff rises with
+ * hand speed, so slow jitter is damped while a real move passes through.
+ * The speed estimate is raw (no separate dcutoff key) so every tunable stays
+ * in config.default.json.
+ */
+function euroAlpha(dt: number, speed: number, minCutoff: number, beta: number): number {
+  const cutoff = minCutoff + beta * speed;
+  if (!(cutoff > 0) || !(dt > 0)) return 1;
+  const alpha = 1 / (1 + 1 / (2 * Math.PI * cutoff) / dt);
+  return Math.min(1, Math.max(0, alpha));
+}
+
+/** Nearest stored face-point distance for an arbitrary hand position. */
+function nearestPointDist(
+  hand: { x: number; y: number },
+  offsets: PointOffsets,
+  sm: { mid: { x: number; y: number }; width: number },
+): number | null {
+  let best: number | null = null;
+  for (const off of Object.values(offsets)) {
+    const d =
+      Math.hypot(hand.x - (sm.mid.x + off.x * sm.width), hand.y - (sm.mid.y + off.y * sm.width)) /
+      sm.width;
+    if (best === null || d < best) best = d;
+  }
+  return best;
 }
 
 export type RepPhase = 'reach' | 'hold';
@@ -192,6 +223,7 @@ export function createStateMachine(t: {
 export interface DetectorOptions {
   struggle: AppConfig['struggle'];
   face: AppConfig['face'];
+  smoothing: AppConfig['smoothing'];
   visMin: number;
   cooldownMs: number;
   /**
@@ -215,6 +247,8 @@ interface RepState {
   holdTotalS: number;
   outS: number;
   fallingFast: boolean;
+  /** Consecutive scored hops with the shoulder above the hike fraction. */
+  hikeStreak: number;
 }
 
 export interface System1Detector {
@@ -227,7 +261,15 @@ export interface System1Detector {
   snapshot(): {
     phase: 'rest' | 'reach' | 'hold' | 'done';
     offsets: PointOffsets | null;
+    /** Smoothed hand distance; null until the first usable frame. */
     lastDist: number | null;
+    /** Raw (unsmoothed) hand distance on the latest usable frame. */
+    rawDist: number | null;
+    /** Latest scored shoulder rise, in shoulder widths. */
+    rise: number | null;
+    zoneRadius: number;
+    /** Top signal of the latest scored hop. */
+    topSignal: TopSignal | null;
   };
 }
 
@@ -256,22 +298,38 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
   let rep: RepState | null = null;
   let restElbow: number | null = null;
   let restDist: number | null = null;
-  let restShoulderY: number | null = null;
   let offsets: PointOffsets | null = storedOffsets ? { ...storedOffsets } : null;
   let lastDist: number | null = null;
+  let lastRawDist: number | null = null;
+  let lastRise: number | null = null;
+  let lastTop: TopSignal | null = null;
   let cleanFrames = 0;
   let sinceScore = 0;
+  // Input smoothing state: reset with every rep (and therefore whenever the
+  // detector resets or a Can't-see-you gap ends the window).
+  let smoothHX: number | null = null;
+  let smoothHY: number | null = null;
+  let smoothHT: number | null = null;
+  let smoothRsY: number | null = null;
+  let restShoulderSamples: number[] = [];
 
   function clearRep() {
     phase = 'rest';
     rep = null;
     lastDist = null;
+    lastRawDist = null;
+    lastRise = null;
+    lastTop = null;
     restElbow = null;
     restDist = null;
-    restShoulderY = null;
     cleanFrames = 0;
     sinceScore = 0;
     offsets = storedOffsets ? { ...storedOffsets } : null;
+    smoothHX = null;
+    smoothHY = null;
+    smoothHT = null;
+    smoothRsY = null;
+    restShoulderSamples = [];
   }
 
   return {
@@ -309,8 +367,47 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
       if (!offsets) return null;
       const measured = minHandDistance(frame.joints, offsets, o.visMin);
       if (!measured) return null;
-      const distNow = measured.dist;
+      const rawHand = handPoint(frame.joints, o.visMin);
+      if (!rawHand) return null;
+      // Input smoothing runs only on usable (gate-ok) frames.
+      let sx: number;
+      let sy: number;
+      if (smoothHX === null || smoothHY === null || smoothHT === null) {
+        sx = rawHand.x;
+        sy = rawHand.y;
+      } else {
+        const smoothDt = frame.t - smoothHT;
+        if (smoothDt > 0) {
+          const rawSpeed =
+            Math.hypot(rawHand.x - smoothHX, rawHand.y - smoothHY) / smoothDt;
+          const alpha = euroAlpha(
+            smoothDt,
+            rawSpeed,
+            o.smoothing.hand_min_cutoff,
+            o.smoothing.hand_beta,
+          );
+          sx = smoothHX + alpha * (rawHand.x - smoothHX);
+          sy = smoothHY + alpha * (rawHand.y - smoothHY);
+          // Snap exactly to raw at full gain so pass-through configs stay bit-exact.
+          if (1 - alpha < 1e-9) {
+            sx = rawHand.x;
+            sy = rawHand.y;
+          }
+        } else {
+          // No time elapsed (duplicate or out-of-order frame): smoothing is
+          // undefined without a dt, so take the raw point like before.
+          sx = rawHand.x;
+          sy = rawHand.y;
+        }
+      }
+      smoothHX = sx;
+      smoothHY = sy;
+      smoothHT = frame.t;
+      const shoulderAlpha = Math.min(1, Math.max(0, o.smoothing.shoulder_alpha));
+      smoothRsY = smoothRsY === null ? rsY : smoothRsY + shoulderAlpha * (rsY - smoothRsY);
+      const distNow = nearestPointDist({ x: sx, y: sy }, offsets, sm) ?? measured.dist;
       lastDist = distNow;
+      lastRawDist = measured.dist;
       const inZone = isAtFace(distNow, deg, radius, touchElbowDeg, o.face.elbow_margin_deg);
       // Every usable frame counts toward the clean-frame minimum, including
       // rest and done frames that never produce a scored hop.
@@ -322,11 +419,12 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
           (restDist !== null && restDist - distNow >= s.start_motion_dist)
         ) {
           phase = 'reach';
+          const restMedian = median(restShoulderSamples);
           rep = {
             startT: frame.t,
             restElbow: restElbow as number,
             restDist: restDist as number,
-            restShoulderY: restShoulderY as number,
+            restShoulderY: restMedian ?? smoothRsY,
             closestDist: distNow,
             stillS: 0,
             lastDist: distNow,
@@ -335,11 +433,13 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
             holdTotalS: 0,
             outS: 0,
             fallingFast: false,
+            hikeStreak: 0,
           };
+          restShoulderSamples = [];
         } else {
           restElbow = deg;
           restDist = distNow;
-          restShoulderY = rsY;
+          restShoulderSamples.push(smoothRsY);
           return null;
         }
       } else if (phase === 'done') {
@@ -349,7 +449,7 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
           rep = null;
           restElbow = deg;
           restDist = distNow;
-          restShoulderY = rsY;
+          restShoulderSamples = [smoothRsY];
         }
         return null;
       } else if (phase === 'reach' && rep) {
@@ -402,7 +502,12 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
       if (sinceScore < s.hop_frames) return null;
       sinceScore = 0;
       if ((phase !== 'reach' && phase !== 'hold') || !rep) return null;
-      const rise = (rep.restShoulderY - rsY) / sm.width;
+      const rise = (rep.restShoulderY - (smoothRsY ?? rsY)) / sm.width;
+      // A hike only counts toward compensation after holding past the
+      // fraction for hike_hold_frames consecutive scored hops.
+      rep.hikeStreak = rise > s.shoulder_hike_frac ? rep.hikeStreak + 1 : 0;
+      const scoredRise = rep.hikeStreak >= s.hike_hold_frames ? rise : 0;
+      lastRise = rise;
       const snapshot = {
         ageS: frame.t - rep.startT,
         closestDist: rep.closestDist,
@@ -413,9 +518,10 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
         dist: distNow,
         touchDist,
       };
-      const scored = scoreWindow(phase, snapshot, rise, radius, s);
+      const scored = scoreWindow(phase, snapshot, scoredRise, radius, s);
       const out = machine.push(nowMs, scored);
       if (!out) return null;
+      lastTop = out.topSignal ?? null;
       const next: System1State = { t: frame.t, state: out.state, score: out.score, escalate: out.escalate };
       if (out.topSignal !== undefined) next.top_signal = out.topSignal;
       return next;
@@ -425,6 +531,10 @@ export function createSystem1Detector(o: DetectorOptions): System1Detector {
         phase,
         offsets: offsets ? { ...offsets } : null,
         lastDist,
+        rawDist: lastRawDist,
+        rise: lastRise,
+        zoneRadius: radius,
+        topSignal: lastTop,
       };
     },
     resetWindow() {

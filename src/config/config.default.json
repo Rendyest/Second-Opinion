@@ -27,8 +27,14 @@
     "stall_speed": 0.2,
     "stall_s": 1.0,
     "shoulder_hike_frac": 0.15,
+    "hike_hold_frames": 5,
     "start_motion_deg": 5,
     "start_motion_dist": 0.1
+  },
+  "smoothing": {
+    "hand_min_cutoff": 1.0,
+    "hand_beta": 0.05,
+    "shoulder_alpha": 0.2
   },
   "face": {
     "reach_margin": 0.5,

@@ -222,6 +222,15 @@ describe('session indicator and coach panel', () => {
     expect(text).not.toMatch(/\bof\b/i);
   });
 
+  it('shows an empty steady bar for moving well with no scored window yet', () => {
+    const html = renderToStaticMarkup(<StruggleIndicator state="moving_well" score={null} fixLine={null} />);
+    expect(html).toContain('Moving well');
+    expect(html).toContain('score-bar');
+    expect(html).toContain('Steadiness: steady');
+    expect(html).not.toMatch(BANNED);
+    expect(stripTags(html)).not.toMatch(/\d/);
+  });
+
   it('renders the coach panel idle with no banned words', () => {
     const html = renderToStaticMarkup(
       <CoachPanel
@@ -258,8 +267,10 @@ describe('session indicator and coach panel', () => {
 });
 
 describe('fps lives outside the session view', () => {
-  it('no session-facing source file imports liveStats', () => {
+  it('no session-facing source file reads liveStats back for display', () => {
     // Producer useLivePose is intentionally excluded: it publishes the stats.
+    // SessionPage is allowed to publish reach details (never rendered there);
+    // what stays forbidden is subscribing to stats for session display.
     const sessionFacing = [
       '../src/pages/SessionPage.tsx',
       '../src/components/AngleReadout.tsx',
@@ -277,7 +288,9 @@ describe('fps lives outside the session view', () => {
     ];
     for (const rel of sessionFacing) {
       const src = readFileSync(new URL(rel, import.meta.url), 'utf-8');
-      expect(src, `${rel} must not import liveStats`).not.toMatch(/liveStats/);
+      expect(src, `${rel} must not subscribe to liveStats`).not.toMatch(
+        /useLiveStats|useGateDetails|useReachDetails|subscribeLiveStats|subscribeGateDetails|subscribeReachDetails/,
+      );
     }
   });
 

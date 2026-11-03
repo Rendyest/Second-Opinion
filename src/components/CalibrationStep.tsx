@@ -114,7 +114,7 @@ export function CalibrationStep() {
 
   return (
     <section aria-label="Calibration">
-      <h2>Calibration</h2>
+      <h2>Arm Calibration</h2>
       <p>
         Sit facing the camera, arms relaxed. Ensure your shoulder, elbows and wrists are in view. We measure your upper arm, forearm, and shoulder
         width during a 2-second capture.

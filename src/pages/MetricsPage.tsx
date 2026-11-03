@@ -1,6 +1,6 @@
 import { MockTransport } from '../components/MockTransport';
 import { useMockStream } from '../mock/MockStreamContext';
-import { useGateDetails, useLiveStats, type GateBoneDetails } from '../pose/liveStats';
+import { useGateDetails, useLiveStats, useReachDetails, type GateBoneDetails } from '../pose/liveStats';
 import type { System1State } from '../contracts';
 
 function fmt(v: number | null): string {
@@ -24,6 +24,7 @@ export function MetricsPage() {
   const { config, player } = useMockStream();
   const liveStats = useLiveStats();
   const gate = useGateDetails();
+  const reach = useReachDetails();
 
   let frames = 0;
   let flagged = 0;
@@ -75,6 +76,21 @@ export function MetricsPage() {
               ? 'Camera starting…'
               : 'Camera off.'}
         </p>
+      </section>
+      <section aria-label="Reach (dev)">
+        <h2>Reach (dev)</h2>
+        {reach === null ? (
+          <p>No live source.</p>
+        ) : (
+          <ul>
+            <li>Raw hand distance: {fmt(reach.rawDist)}</li>
+            <li>Smoothed hand distance: {fmt(reach.smoothDist)}</li>
+            <li>Zone radius: {fmt(reach.zoneRadius)}</li>
+            <li>Shoulder rise: {fmt(reach.rise)}</li>
+            <li>Phase: {reach.phase}</li>
+            <li>Top signal: {reach.topSignal ?? 'none'}</li>
+          </ul>
+        )}
       </section>
       <section aria-label="Gate (dev)">
         <h2>Gate (dev)</h2>

@@ -9,8 +9,8 @@ describe('face reach step', () => {
     const html = renderToStaticMarkup(<FaceReachStep />);
     // Check visible text: tags such as h2 necessarily contain digits.
     const text = html.replace(/<[^>]+>/g, ' ');
-    expect(html).toContain('Touch your face');
-    expect(html).toContain('Stand facing the camera');
+    expect(html).toContain('Face Calibration');
+    expect(html).toContain('Sit facing the camera');
     expect(html).toContain('Start face step');
     expect(html).toContain('Continue without face step');
     expect(html).toContain('Face step camera preview');

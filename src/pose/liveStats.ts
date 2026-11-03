@@ -100,3 +100,45 @@ export function subscribeGateDetails(fn: () => void): () => void {
 export function useGateDetails(): GateDetails | null {
   return useSyncExternalStore(subscribeGateDetails, getGateSnapshot, getGateSnapshot);
 }
+
+/** Latest reach-and-hold detector readout for the dev panel on /metrics. */
+export interface ReachDetails {
+  /** Unsmoothed nearest-point hand distance, in shoulder widths. */
+  rawDist: number | null;
+  /** Smoothed nearest-point hand distance, in shoulder widths. */
+  smoothDist: number | null;
+  zoneRadius: number;
+  /** Shoulder rise versus the rest median, in shoulder widths. */
+  rise: number | null;
+  phase: string;
+  topSignal: string | null;
+}
+
+let reachDetails: ReachDetails | null = null;
+const reachListeners = new Set<() => void>();
+
+/** Publish the latest reach readout (dev only). Cleared with the detector. */
+export function publishReachDetails(next: ReachDetails | null): void {
+  reachDetails = next;
+  for (const fn of reachListeners) fn();
+}
+
+function getReachSnapshot(): ReachDetails | null {
+  return reachDetails;
+}
+
+export function subscribeReachDetails(fn: () => void): () => void {
+  reachListeners.add(fn);
+  return () => {
+    reachListeners.delete(fn);
+  };
+}
+
+/**
+ * For the reviewer dev panel (e.g. /metrics). Never used on participant
+ * routes. getReachSnapshot doubles as the server snapshot so reviewer pages
+ * can also render via renderToStaticMarkup.
+ */
+export function useReachDetails(): ReachDetails | null {
+  return useSyncExternalStore(subscribeReachDetails, getReachSnapshot, getReachSnapshot);
+}

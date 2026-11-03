@@ -29,9 +29,11 @@ const GOOD_CONFIG = {
     stall_speed: 0.2,
     stall_s: 1.0,
     shoulder_hike_frac: 0.15,
+    hike_hold_frames: 5,
     start_motion_deg: 5,
     start_motion_dist: 0.1,
   },
+  smoothing: { hand_min_cutoff: 1.0, hand_beta: 0.05, shoulder_alpha: 0.2 },
   face: {
     reach_margin: 0.5,
     zone_min: 0.25,
@@ -112,6 +114,18 @@ describe('config validation', () => {
     expect(isAppConfig(null)).toBe(false);
     expect(isAppConfig('config.json')).toBe(false);
   });
+
+  it('rejects a non-integer hike hold count', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, struggle: { ...GOOD_CONFIG.struggle, hike_hold_frames: 2.5 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a missing hike hold count', () => {
+    const { hike_hold_frames: _dropped, ...struggle } = GOOD_CONFIG.struggle;
+    void _dropped;
+    expect(isAppConfig({ ...GOOD_CONFIG, struggle })).toBe(false);
+  });
 });
 
 describe('config face section', () => {
@@ -180,6 +194,32 @@ describe('config gate section', () => {
   it('rejects a non-integer cant_see enter count', () => {
     expect(
       isAppConfig({ ...GOOD_CONFIG, gate: { ...GOOD_CONFIG.gate, cant_see_enter_frames: 2.5 } }),
+    ).toBe(false);
+  });
+});
+
+describe('config smoothing section', () => {
+  it('rejects a config missing the smoothing section', () => {
+    const { smoothing: _smoothing, ...rest } = GOOD_CONFIG;
+    void _smoothing;
+    expect(isAppConfig(rest)).toBe(false);
+  });
+
+  it('rejects a non-positive hand cutoff', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, smoothing: { ...GOOD_CONFIG.smoothing, hand_min_cutoff: 0 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a negative hand beta', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, smoothing: { ...GOOD_CONFIG.smoothing, hand_beta: -0.1 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a shoulder alpha above one', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, smoothing: { ...GOOD_CONFIG.smoothing, shoulder_alpha: 1.5 } }),
     ).toBe(false);
   });
 });

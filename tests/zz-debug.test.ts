@@ -9,9 +9,10 @@ const T = {
   reach_window_s: 4, hold_s: 30, hold_max_s: 60, drop_s: 1.5,
   drop_tolerance_s: 0.5, drop_speed: 1.0, sink_weight: 0.6,
   stall_speed: 0.2, stall_s: 1.0, shoulder_hike_frac: 0.15,
-  start_motion_deg: 5, start_motion_dist: 0.1,
+  hike_hold_frames: 5, start_motion_deg: 5, start_motion_dist: 0.1,
 };
 const FACE = { reach_margin: 0.5, zone_min: 0.25, elbow_margin_deg: 20, default_touch_dist: 0.2, default_elbow_deg: 70, anchor_smooth: 0.1 };
+const SMOOTHING = { hand_min_cutoff: 1e9, hand_beta: 0, shoulder_alpha: 1 };
 const STORED = {
   offsets: {
     nose: { x: 0, y: -1.0 }, l_eye_in: { x: -0.125, y: -1.2 }, l_eye: { x: -0.2, y: -1.2 },
@@ -21,7 +22,7 @@ const STORED = {
   },
   touchDist: 0.2, touchElbowDeg: 70,
 };
-const OPTS: DetectorOptions = { struggle: T, face: FACE, visMin: 0.5, cooldownMs: 60000, stored: STORED };
+const OPTS: DetectorOptions = { struggle: T, face: FACE, smoothing: SMOOTHING, visMin: 0.5, cooldownMs: 60000, stored: STORED };
 function joint(x: number, y: number, conf = 0.9): Joint2D { return { x, y, conf }; }
 function frame(t: number, opts: { ok?: boolean; elbow?: number; index?: { x: number; y: number }; shoulderY?: number } = {}): PoseFrame {
   const { ok = true, elbow = 150, index = { x: 0.5, y: 0.9 }, shoulderY = 0.5 } = opts;

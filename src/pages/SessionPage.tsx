@@ -10,6 +10,7 @@ import { config } from '../config';
 import { createGateTracker, mergeGate, type GateTracker } from '../pose/gate';
 import { createCantSeeYouTracker, type CantSeeYou } from '../system1/cantSeeYou';
 import { createSystem1Detector } from '../system1/detector';
+import { publishReachDetails } from '../pose/liveStats';
 import { useCalibration } from '../pose/calibration';
 import { statusText } from '../pose/statusText';
 import { StruggleIndicator } from '../components/StruggleIndicator';
@@ -71,6 +72,7 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
     detectorRef.current = createSystem1Detector({
       struggle: config.struggle,
       face: config.face,
+      smoothing: config.smoothing,
       visMin: config.gate.vis_min,
       cooldownMs: config.coach.cooldown_ms,
     });
@@ -89,6 +91,7 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
     trackerRef.current?.reset();
     cantSeeRef.current?.reset();
     detectorRef.current?.reset();
+    publishReachDetails(null);
     lastPushedRef.current = null;
     setCantSee({ active: false, fixLine: null });
     setLiveSystem(null);
@@ -118,6 +121,16 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
     wasCantSee.current = nextCantSee.active;
     if (source === 'live') {
       const next = detector.push(merged, Date.now());
+      // Dev-only reach readout for /metrics; never rendered on /session.
+      const reach = detector.snapshot();
+      publishReachDetails({
+        rawDist: reach.rawDist,
+        smoothDist: reach.lastDist,
+        zoneRadius: reach.zoneRadius,
+        rise: reach.rise,
+        phase: reach.phase,
+        topSignal: reach.topSignal,
+      });
       if (next) {
         setLiveSystem(next);
         if (next.escalate) setEscalationId((id) => id + 1);

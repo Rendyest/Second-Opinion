@@ -32,8 +32,14 @@ export interface AppConfig {
     stall_speed: number;
     stall_s: number;
     shoulder_hike_frac: number;
+    hike_hold_frames: number;
     start_motion_deg: number;
     start_motion_dist: number;
+  };
+  smoothing: {
+    hand_min_cutoff: number;
+    hand_beta: number;
+    shoulder_alpha: number;
   };
   face: {
     reach_margin: number;
@@ -122,10 +128,24 @@ function isStruggle(v: unknown): v is AppConfig['struggle'] {
     (s['stall_s'] as number) > 0 &&
     isNum(s['shoulder_hike_frac']) &&
     (s['shoulder_hike_frac'] as number) > 0 &&
+    isPositiveInt(s['hike_hold_frames']) &&
     isNum(s['start_motion_deg']) &&
     (s['start_motion_deg'] as number) >= 0 &&
     isNum(s['start_motion_dist']) &&
     (s['start_motion_dist'] as number) >= 0
+  );
+}
+
+function isSmoothing(v: unknown): v is AppConfig['smoothing'] {
+  if (!isPlainObject(v)) return false;
+  return (
+    isNum(v['hand_min_cutoff']) &&
+    (v['hand_min_cutoff'] as number) > 0 &&
+    isNum(v['hand_beta']) &&
+    (v['hand_beta'] as number) >= 0 &&
+    isNum(v['shoulder_alpha']) &&
+    (v['shoulder_alpha'] as number) >= 0 &&
+    (v['shoulder_alpha'] as number) <= 1
   );
 }
 
@@ -178,6 +198,7 @@ export function isAppConfig(v: unknown): v is AppConfig {
   return (
     isGate(v['gate']) &&
     isStruggle(v['struggle']) &&
+    isSmoothing(v['smoothing']) &&
     isFace(v['face']) &&
     isCoach(v['coach']) &&
     isBaseline(v['baseline']) &&

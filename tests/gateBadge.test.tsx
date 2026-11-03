@@ -71,7 +71,7 @@ describe('calibration step', () => {
   it('starts idle with the facing-camera instruction, start, and continue options', () => {
     const html = renderToStaticMarkup(<CalibrationStep />);
     expect(html).toContain('Calibration');
-    expect(html).toContain('Stand facing the camera, arms relaxed');
+    expect(html).toContain('Sit facing the camera, arms relaxed');
     expect(html).toContain('Start calibration');
     expect(html).toContain('Continue without calibration');
   });

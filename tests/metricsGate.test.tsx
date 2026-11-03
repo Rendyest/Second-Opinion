@@ -6,10 +6,27 @@ import { MetricsPage } from '../src/pages/MetricsPage';
 import { MockStreamContext, type MockStreamValue } from '../src/mock/MockStreamContext';
 import { MockPlayer } from '../src/mock/mockStreamPlayer';
 import { parseReplayFile } from '../src/contracts';
-import { publishGateDetails, type GateDetails } from '../src/pose/liveStats';
+import {
+  publishGateDetails,
+  publishReachDetails,
+  type GateDetails,
+  type ReachDetails,
+} from '../src/pose/liveStats';
 import { config } from '../src/config';
 
-const DEV_LABELS = ['Gate (dev)', 'smoothed ratio', 'history median', 'jump fraction', 'No live source.'];
+const DEV_LABELS = [
+  'Gate (dev)',
+  'smoothed ratio',
+  'history median',
+  'jump fraction',
+  'No live source.',
+  'Reach (dev)',
+  'Raw hand distance',
+  'Smoothed hand distance',
+  'Zone radius',
+  'Shoulder rise',
+  'Top signal',
+];
 
 /** SessionPage against the real mock replay, stepped to the t=1.5 pose_frame. */
 function sessionMarkup(): string {
@@ -81,5 +98,43 @@ describe('gate dev diagnostics live on /metrics, never on /session', () => {
     expect(html).toContain('jump fraction');
     expect(html).toContain('foreshortening');
     publishGateDetails(null);
+  });
+});
+
+const REACH_FIXTURE: ReachDetails = {
+  rawDist: 0.31,
+  smoothDist: 0.29,
+  zoneRadius: 0.3,
+  rise: 0.2,
+  phase: 'reach',
+  topSignal: 'stall',
+};
+
+describe('reach dev diagnostics live on /metrics, never on /session', () => {
+  it('shows no reach labels on the session page', () => {
+    const html = sessionMarkup();
+    for (const label of ['Reach (dev)', 'Raw hand distance', 'Smoothed hand distance']) {
+      expect(html).not.toContain(label);
+    }
+  });
+
+  it('shows no reach readout on /metrics with no live data', () => {
+    publishReachDetails(null);
+    publishGateDetails(FIXTURE);
+    expect(metricsMarkup()).not.toContain('Raw hand distance');
+    publishGateDetails(null);
+  });
+
+  it('shows the reach readout on /metrics when published', () => {
+    publishReachDetails(REACH_FIXTURE);
+    const html = metricsMarkup();
+    expect(html).toContain('Reach (dev)');
+    expect(html).toContain('Raw hand distance');
+    expect(html).toContain('Smoothed hand distance');
+    expect(html).toContain('Zone radius');
+    expect(html).toContain('Shoulder rise');
+    expect(html).toContain('Top signal');
+    expect(html).toContain('stall');
+    publishReachDetails(null);
   });
 });

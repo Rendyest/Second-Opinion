@@ -13,7 +13,10 @@ export function scoreLevel(score: number, enter: number, exit: number): Steadine
 
 interface StruggleIndicatorProps {
   state: System1StateName;
-  /** Null when too few clean frames remain in the window: no score, no bar. */
+  /**
+   * Null when too few clean frames remain in the window: no bar, except that
+   * moving_well still shows an empty steady bar rather than hiding the meter.
+   */
   score: number | null;
   /** Fix line shown under "Can't see you" instead of a why line. */
   fixLine?: string | null;
@@ -28,7 +31,13 @@ interface StruggleIndicatorProps {
  * no "x of y" — never colour alone, never numbers.
  */
 export function StruggleIndicator({ state, score, fixLine, topSignal }: StruggleIndicatorProps) {
-  const level = score === null ? null : scoreLevel(score, config.struggle.enter_threshold, config.struggle.exit_threshold);
+  // An unscored moving_well reads as steady-and-empty; every other unscored
+  // state keeps no bar.
+  const shownScore = score ?? (state === 'moving_well' ? 0 : null);
+  const level =
+    shownScore === null
+      ? null
+      : scoreLevel(shownScore, config.struggle.enter_threshold, config.struggle.exit_threshold);
   const line =
     state === 'cant_see_you'
       ? (fixLine ?? 'Try moving back into view of the camera.')
@@ -39,11 +48,11 @@ export function StruggleIndicator({ state, score, fixLine, topSignal }: Struggle
     <section aria-label="How the session is going">
       <h2>{STATE_LABEL[state]}</h2>
       {line !== null && <p>{line}</p>}
-      {level !== null && score !== null && (
+      {level !== null && shownScore !== null && (
         <div className="score-bar" role="img" aria-label={`Steadiness: ${level}`}>
           <div
             className={`score-fill score-fill-${level.replace(' ', '-')}`}
-            style={{ width: `${Math.round(Math.min(1, Math.max(0, score)) * 100)}%` }}
+            style={{ width: `${Math.round(Math.min(1, Math.max(0, shownScore)) * 100)}%` }}
             aria-hidden="true"
           />
         </div>
