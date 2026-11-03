@@ -78,5 +78,15 @@
   "review": {
     "note_max_chars": 200,
     "blind_default": true
+  },
+  "mask": {
+    "min_landmark_visibility": 0.5,
+    "min_landmarks": 4,
+    "pose_margin_frac": 0.5,
+    "face_margin_frac": 0.4,
+    "stale_box_frames": 0,
+    "stale_expand_frac": 0.2,
+    "on_miss": "full_mask",
+    "max_unusable_frac": 0.5
   }
 }

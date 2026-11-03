@@ -81,6 +81,16 @@ export interface AppConfig {
     note_max_chars: number;
     blind_default: boolean;
   };
+  mask: {
+    min_landmark_visibility: number;
+    min_landmarks: number;
+    pose_margin_frac: number;
+    face_margin_frac: number;
+    stale_box_frames: number;
+    stale_expand_frac: number;
+    on_miss: 'full_mask' | 'drop';
+    max_unusable_frac: number;
+  };
   baseline: {
     fixed_interval_s: number;
   };
@@ -262,6 +272,30 @@ function isReview(v: unknown): v is AppConfig['review'] {
   return isPositiveInt(v['note_max_chars']) && typeof v['blind_default'] === 'boolean';
 }
 
+function isMask(v: unknown): v is AppConfig['mask'] {
+  if (!isPlainObject(v)) return false;
+  const vis = v['min_landmark_visibility'];
+  const frac = v['max_unusable_frac'];
+  return (
+    isNum(vis) &&
+    (vis as number) >= 0 &&
+    (vis as number) <= 1 &&
+    isPositiveInt(v['min_landmarks']) &&
+    isNum(v['pose_margin_frac']) &&
+    (v['pose_margin_frac'] as number) >= 0 &&
+    isNum(v['face_margin_frac']) &&
+    (v['face_margin_frac'] as number) >= 0 &&
+    Number.isInteger(v['stale_box_frames']) &&
+    (v['stale_box_frames'] as number) >= 0 &&
+    isNum(v['stale_expand_frac']) &&
+    (v['stale_expand_frac'] as number) >= 0 &&
+    (v['on_miss'] === 'full_mask' || v['on_miss'] === 'drop') &&
+    isNum(frac) &&
+    (frac as number) >= 0 &&
+    (frac as number) <= 1
+  );
+}
+
 export function isAppConfig(v: unknown): v is AppConfig {
   if (!isPlainObject(v)) return false;
   return (
@@ -274,6 +308,7 @@ export function isAppConfig(v: unknown): v is AppConfig {
     isSetup(v['setup']) &&
     isBaseline(v['baseline']) &&
     isReview(v['review']) &&
+    isMask(v['mask']) &&
     isUi(v['ui'])
   );
 }

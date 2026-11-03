@@ -50,3 +50,9 @@ weights/
 *.bin
 *.h5
 *.npz
+
+# Clip-masking workdirs (local only, never committed)
+scripts/clips/
+scripts/masked/
+scripts/models/
+scripts/.venv/

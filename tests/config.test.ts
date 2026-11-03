@@ -45,6 +45,16 @@ const GOOD_CONFIG = {
   coach: { timeout_ms: 10000, cooldown_ms: 60000, max_reply_chars: 300, summary_window_s: 10 },
   metrics: { interval_s: 2, coverage_window_s: 3, record_max_s: 120, import_min_frames_per_s: 15 },
   review: { note_max_chars: 200, blind_default: true },
+  mask: {
+    min_landmark_visibility: 0.5,
+    min_landmarks: 4,
+    pose_margin_frac: 0.5,
+    face_margin_frac: 0.4,
+    stale_box_frames: 0,
+    stale_expand_frac: 0.2,
+    on_miss: 'full_mask',
+    max_unusable_frac: 0.5,
+  },
   setup: {
     check_enter_frames: 3,
     check_exit_frames: 5,
@@ -372,6 +382,32 @@ describe('config review section', () => {
   it('rejects a non-boolean blind default', () => {
     expect(
       isAppConfig({ ...GOOD_CONFIG, review: { ...GOOD_CONFIG.review, blind_default: 'yes' } }),
+    ).toBe(false);
+  });
+});
+
+describe('config mask section', () => {
+  it('rejects a config missing the mask section', () => {
+    const { mask: _mask, ...rest } = GOOD_CONFIG;
+    void _mask;
+    expect(isAppConfig(rest)).toBe(false);
+  });
+
+  it('rejects an unknown on_miss policy', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, mask: { ...GOOD_CONFIG.mask, on_miss: 'blur' } }),
+    ).toBe(false);
+  });
+
+  it('rejects a visibility threshold above one', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, mask: { ...GOOD_CONFIG.mask, min_landmark_visibility: 1.5 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a negative stale box window', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, mask: { ...GOOD_CONFIG.mask, stale_box_frames: -1 } }),
     ).toBe(false);
   });
 });
