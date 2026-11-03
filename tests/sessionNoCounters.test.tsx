@@ -1,20 +1,48 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SessionPage, defaultSource } from '../src/pages/SessionPage';
 import defaults from '../src/config/config.default.json';
+
+// SessionPage reads the merged config singleton, so a local override with
+// dev_controls on would leak dev UI into these renders. Pin this suite to
+// the committed defaults; the dev-controls case below asserts on them.
+vi.mock('../src/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/config')>();
+  const { default: committed } = await import('../src/config/config.default.json');
+  return { ...actual, config: actual.buildConfig(committed) };
+});
 import {
   CHECKING_IN,
   COACH_BUTTON_LABEL,
+  EMERGENCY_STOP_LABEL,
+  EMERGENCY_STOPPED_NOTE,
+  FINISH_CLIPS_NEED,
+  FINISH_CONFIRM,
+  FINISH_DOWNLOAD_LABEL,
+  FINISH_LABEL,
   FIX_BY_REASON,
   LOCAL_FALLBACK,
+  MARK_DONE_NOTE,
+  MARK_IDLE_LABEL,
+  MARK_LABEL,
+  PAUSE_LABEL,
+  PAUSED_NOTE,
+  RESUME_LABEL,
   SESSION_INTRO,
   SESSION_PRIVACY_NOTE,
   STATE_LABEL,
+  STATUS_CAMERA_OFF,
+  STATUS_CAMERA_ON,
+  STATUS_RECORDING_OFF,
+  STATUS_RECORDING_ON,
+  STATUS_TIPS_OFF,
+  STATUS_TIPS_ON,
   TASK_NAME,
   TOP_SIGNAL_WHY,
   fixLineFor,
 } from '../src/copy';
+import { DELETE_CLIPS_CONFIRM } from '../src/consentCopy';
 import { MetricsPage } from '../src/pages/MetricsPage';
 import { publishLiveStats } from '../src/pose/liveStats';
 import { AngleList } from '../src/components/AngleReadout';
@@ -99,7 +127,11 @@ describe('session has no loop statistics', () => {
 
   it('renders the session page with no banned words and no stat test ids', () => {
     const html = sessionMarkup();
-    expect(html).not.toMatch(BANNED);
+    // The delete confirmation names "saved measurements" in the user's own
+    // mandated wording; allow-list that exact line, guard everything else.
+    expect(html).toContain(DELETE_CLIPS_CONFIRM);
+    const guarded = html.split(DELETE_CLIPS_CONFIRM).join('');
+    expect(guarded).not.toMatch(BANNED);
     expect(html).not.toMatch(STAT_TESTID);
   });
 
@@ -138,6 +170,24 @@ describe('session has no loop statistics', () => {
       TASK_NAME,
       SESSION_INTRO,
       SESSION_PRIVACY_NOTE,
+      STATUS_CAMERA_ON,
+      STATUS_CAMERA_OFF,
+      STATUS_RECORDING_ON,
+      STATUS_RECORDING_OFF,
+      STATUS_TIPS_ON,
+      STATUS_TIPS_OFF,
+      PAUSE_LABEL,
+      RESUME_LABEL,
+      PAUSED_NOTE,
+      FINISH_LABEL,
+      FINISH_CONFIRM,
+      FINISH_DOWNLOAD_LABEL,
+      FINISH_CLIPS_NEED,
+      EMERGENCY_STOP_LABEL,
+      EMERGENCY_STOPPED_NOTE,
+      MARK_LABEL,
+      MARK_IDLE_LABEL,
+      MARK_DONE_NOTE,
     ];
     expect(strings.length).toBeGreaterThan(10);
     for (const s of strings) {
@@ -159,6 +209,15 @@ describe('session has no loop statistics', () => {
 
   it('the banned pattern catches a hard-coded violation', () => {
     expect('Camera on, about 24 fps. 3 calls saved.').toMatch(BANNED);
+  });
+
+  it('the banned pattern catches a violation in session-control wording', () => {
+    // Proof the guard covers the new controls: a banned line shaped like a
+    // recording status must fail, while the real status lines pass.
+    expect('Recording on, 2 calls saved.').toMatch(BANNED);
+    expect(STATUS_RECORDING_ON).not.toMatch(BANNED);
+    expect(EMERGENCY_STOPPED_NOTE).not.toMatch(BANNED);
+    expect(MARK_DONE_NOTE).not.toMatch(BANNED);
   });
 });
 
@@ -247,6 +306,24 @@ describe('session indicator and coach panel', () => {
     expect(html).not.toMatch(STAT_TESTID);
   });
 
+  it('says tips are off instead of Get a tip when the summary choice is unticked', () => {
+    const html = renderToStaticMarkup(
+      <CoachPanel
+        frame={okFrame()}
+        systemState="hesitating"
+        topSignal="stall"
+        cantSeeYouActive={false}
+        escalationId={0}
+        statsEpoch="test"
+        consent={{ camera: false, recording: false, cloud_summary: false, cloud_clips: false }}
+      />,
+    );
+    expect(html).toContain('Tips are off');
+    expect(html).not.toContain('Get a tip');
+    expect(html).not.toMatch(BANNED);
+    expect(html).not.toMatch(STAT_TESTID);
+  });
+
   it('disables the button instead of repeating the fix line when tracking is lost', () => {
     const html = renderToStaticMarkup(
       <CoachPanel
@@ -294,6 +371,31 @@ describe('fps lives outside the session view', () => {
     }
   });
 
+  it('no session-facing source file imports replay, recorder, or loop metrics modules', () => {
+    // The shared per-frame pipeline (pipeline/run) is the one exception: the
+    // live session and clip replay both call it. Everything replay-shaped —
+    // the replay runner, its policies, the recorder, the results panel, and
+    // metrics copy — stays off the session route.
+    const sessionFacing = [
+      '../src/pages/SessionPage.tsx',
+      '../src/components/AngleReadout.tsx',
+      '../src/components/VideoStage.tsx',
+      '../src/components/MockTransport.tsx',
+      '../src/components/SourceSwitch.tsx',
+      '../src/components/ErrorBoundary.tsx',
+      '../src/components/StruggleIndicator.tsx',
+      '../src/components/CoachPanel.tsx',
+      '../src/components/CalibrationStep.tsx',
+      '../src/components/FaceReachStep.tsx',
+    ];
+    for (const rel of sessionFacing) {
+      const src = readFileSync(new URL(rel, import.meta.url), 'utf-8');
+      expect(src, `${rel} must stay off the session route`).not.toMatch(
+        /pipeline\/replay|pipeline\/policies|pipeline\/clip|LoopMetricsPanel|ClipRecorder|ReplaySection|metricsCopy/,
+      );
+    }
+  });
+
   it('the session page renders no fps text', () => {
     expect(sessionMarkup()).not.toMatch(/\bfps\b/i);
   });
@@ -320,7 +422,10 @@ describe('session live branch (no camera)', () => {
 
   it('renders the live branch with no banned words and no stat test ids', () => {
     const html = liveMarkup();
-    expect(html).not.toMatch(BANNED);
+    // Same mandated delete wording as the mock branch (see above).
+    expect(html).toContain(DELETE_CLIPS_CONFIRM);
+    const guarded = html.split(DELETE_CLIPS_CONFIRM).join('');
+    expect(guarded).not.toMatch(BANNED);
     expect(html).not.toMatch(STAT_TESTID);
   });
 

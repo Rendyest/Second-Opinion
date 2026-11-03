@@ -55,6 +55,22 @@ export interface AppConfig {
     max_reply_chars: number;
     summary_window_s: number;
   };
+  metrics: {
+    interval_s: number;
+    coverage_window_s: number;
+    record_max_s: number;
+  };
+  setup: {
+    check_enter_frames: number;
+    check_exit_frames: number;
+    edge_margin: number;
+    brightness_min: number;
+    brightness_max: number;
+    tilt_max_deg: number;
+    facing_tol: number;
+    fps_window_s: number;
+    fps_min: number;
+  };
   ui: {
     readout_hz: number;
     live_emit_hz: number;
@@ -180,6 +196,47 @@ function isCoach(v: unknown): v is AppConfig['coach'] {
   );
 }
 
+function isSetup(v: unknown): v is AppConfig['setup'] {
+  if (!isPlainObject(v)) return false;
+  const min = v['brightness_min'];
+  const max = v['brightness_max'];
+  const edge = v['edge_margin'];
+  return (
+    isPositiveInt(v['check_enter_frames']) &&
+    isPositiveInt(v['check_exit_frames']) &&
+    isNum(edge) &&
+    (edge as number) >= 0 &&
+    (edge as number) < 0.5 &&
+    isNum(min) &&
+    (min as number) >= 0 &&
+    (min as number) <= 255 &&
+    isNum(max) &&
+    (max as number) >= 0 &&
+    (max as number) <= 255 &&
+    (min as number) <= (max as number) &&
+    isNum(v['tilt_max_deg']) &&
+    (v['tilt_max_deg'] as number) >= 0 &&
+    isNum(v['facing_tol']) &&
+    (v['facing_tol'] as number) >= 0 &&
+    isNum(v['fps_window_s']) &&
+    (v['fps_window_s'] as number) > 0 &&
+    isNum(v['fps_min']) &&
+    (v['fps_min'] as number) > 0
+  );
+}
+
+function isMetrics(v: unknown): v is AppConfig['metrics'] {
+  if (!isPlainObject(v)) return false;
+  return (
+    isNum(v['interval_s']) &&
+    (v['interval_s'] as number) > 0 &&
+    isNum(v['coverage_window_s']) &&
+    (v['coverage_window_s'] as number) > 0 &&
+    isNum(v['record_max_s']) &&
+    (v['record_max_s'] as number) > 0
+  );
+}
+
 function isUi(v: unknown): v is AppConfig['ui'] {
   if (!isPlainObject(v)) return false;
   return (
@@ -201,6 +258,8 @@ export function isAppConfig(v: unknown): v is AppConfig {
     isSmoothing(v['smoothing']) &&
     isFace(v['face']) &&
     isCoach(v['coach']) &&
+    isMetrics(v['metrics']) &&
+    isSetup(v['setup']) &&
     isBaseline(v['baseline']) &&
     isUi(v['ui'])
   );

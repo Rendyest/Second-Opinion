@@ -15,6 +15,8 @@ import {
   type GateThresholds,
 } from './gate';
 import { loadCalibrationState } from './calibration';
+import { canUseCamera, loadConsent } from '../consent/consent';
+import { CONSENT_CAMERA_NEED } from '../consentCopy';
 /**
  * Where the model file is loaded from (the only runtime network calls this
  * slice makes, besides the local dev server):
@@ -141,6 +143,13 @@ export function useLivePose(): LivePose {
   }, [stop]);
 
   const start = useCallback(() => {
+    // Consent is enforced here, not just in the checkboxes: without the
+    // camera choice the camera never starts. Ticking it never starts the
+    // camera by itself — the person still presses "Turn on camera".
+    if (!canUseCamera(loadConsent())) {
+      setError(CONSENT_CAMERA_NEED);
+      return;
+    }
     if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
       setStatus('denied');
       setError('This browser cannot reach a camera. Try a recent Chrome or Edge on localhost or HTTPS.');

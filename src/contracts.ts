@@ -146,6 +146,153 @@ export function isReplayEvent(v: unknown): v is ReplayEvent {
   }
 }
 
+/**
+ * A recorded clip: landmark numbers only (rounded to 4 decimals), no images,
+ * no video, no pixel data. Replay recomputes angles, gate, can't-see-you and
+ * System 1 from the joints; recorded gate flags are ignored.
+ */
+export interface ClipFrame {
+  /** Clip-relative seconds. */
+  t: number;
+  joints: Record<string, Joint2D>;
+}
+
+export interface ClipLabel {
+  start_s: number;
+  end_s: number;
+}
+
+export interface RecordedClip {
+  version: 1;
+  source: 'recorded' | 'synthetic';
+  name: string;
+  fps: number;
+  frames: ClipFrame[];
+  /** Null replays in a mode labelled "uncalibrated". */
+  baseline: { upperArm: number; forearm: number; shoulderWidth: number } | null;
+  face: { offsets: Record<string, { x: number; y: number }>; touchDist: number; touchElbowDeg: number } | null;
+  config_used: Record<string, unknown>;
+  labels?: ClipLabel[];
+  /** Point marks (clip-relative seconds) from "Mark this moment". Never any media. */
+  marks?: number[];
+}
+
+const CLIP_KEYS: readonly string[] = [
+  'version',
+  'source',
+  'name',
+  'fps',
+  'frames',
+  'baseline',
+  'face',
+  'config_used',
+  'labels',
+  'marks',
+];
+
+/** True for any string that smells like embedded image data. */
+function looksLikeImageData(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  if (v.startsWith('data:')) return true;
+  return v.length > 256 && /^[A-Za-z0-9+/=\s]+$/.test(v);
+}
+
+function containsImageData(v: unknown): boolean {
+  if (looksLikeImageData(v)) return true;
+  if (Array.isArray(v)) return v.some(containsImageData);
+  if (isRecord(v)) return Object.values(v).some(containsImageData);
+  return false;
+}
+
+function isFiniteNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function isClipFrame(v: unknown): v is ClipFrame {
+  if (!isRecord(v)) return false;
+  const keys = Object.keys(v);
+  if (keys.length !== 2 || !keys.includes('t') || !keys.includes('joints')) return false;
+  if (!isFiniteNum(v['t']) || (v['t'] as number) < 0) return false;
+  const joints = v['joints'];
+  if (!isRecord(joints)) return false;
+  return Object.values(joints).every(isJoint);
+}
+
+function isClipLabel(v: unknown): v is ClipLabel {
+  if (!isRecord(v)) return false;
+  const keys = Object.keys(v);
+  if (keys.length !== 2 || !keys.includes('start_s') || !keys.includes('end_s')) return false;
+  if (!isFiniteNum(v['start_s']) || !isFiniteNum(v['end_s'])) return false;
+  return (v['start_s'] as number) >= 0 && (v['end_s'] as number) >= (v['start_s'] as number);
+}
+
+function isClipBaseline(v: unknown): v is NonNullable<RecordedClip['baseline']> {
+  if (!isRecord(v)) return false;
+  return (
+    isFiniteNum(v['upperArm']) &&
+    (v['upperArm'] as number) > 0 &&
+    isFiniteNum(v['forearm']) &&
+    (v['forearm'] as number) > 0 &&
+    isFiniteNum(v['shoulderWidth']) &&
+    (v['shoulderWidth'] as number) > 0
+  );
+}
+
+function isClipFace(v: unknown): v is NonNullable<RecordedClip['face']> {
+  if (!isRecord(v)) return false;
+  const offsets = v['offsets'];
+  if (!isRecord(offsets) || Object.keys(offsets).length === 0) return false;
+  const offsetsOk = Object.values(offsets).every(
+    (o) => isRecord(o) && isFiniteNum(o['x']) && isFiniteNum(o['y']),
+  );
+  return (
+    offsetsOk &&
+    isFiniteNum(v['touchDist']) &&
+    (v['touchDist'] as number) > 0 &&
+    isFiniteNum(v['touchElbowDeg'])
+  );
+}
+
+export function isRecordedClip(v: unknown): v is RecordedClip {
+  if (!isRecord(v)) return false;
+  for (const key of Object.keys(v)) {
+    if (!CLIP_KEYS.includes(key)) return false;
+  }
+  if (v['version'] !== 1) return false;
+  if (v['source'] !== 'recorded' && v['source'] !== 'synthetic') return false;
+  if (typeof v['name'] !== 'string' || (v['name'] as string).length === 0) return false;
+  if (!isFiniteNum(v['fps']) || (v['fps'] as number) <= 0) return false;
+  if (!Array.isArray(v['frames']) || !(v['frames'] as unknown[]).every(isClipFrame)) return false;
+  const baseline = v['baseline'];
+  if (baseline !== null && !isClipBaseline(baseline)) return false;
+  const face = v['face'];
+  if (face !== null && !isClipFace(face)) return false;
+  if (!isRecord(v['config_used'])) return false;
+  if (v['labels'] !== undefined) {
+    if (!Array.isArray(v['labels']) || !(v['labels'] as unknown[]).every(isClipLabel)) return false;
+  }
+  if (v['marks'] !== undefined) {
+    if (
+      !Array.isArray(v['marks']) ||
+      !(v['marks'] as unknown[]).every((m) => isFiniteNum(m) && (m as number) >= 0)
+    ) {
+      return false;
+    }
+  }
+  return !containsImageData(v);
+}
+
+/** Parse pasted or picked clip JSON; throws a plain-worded message on failure. */
+export function parseRecordedClip(v: unknown): RecordedClip {
+  if (!isRecordedClip(v)) {
+    throw new Error(
+      'That file is not a valid clip. It must be clip JSON with joints only ' +
+        '(no images), a version of 1, and no unknown fields.',
+    );
+  }
+  return v;
+}
+
 /** Parse a replay file of shape `{ "events": [...] }`; throws naming the first bad entry. */
 export function parseReplayFile(v: unknown): ReplayEvent[] {
   if (!isRecord(v) || !Array.isArray(v['events'])) {

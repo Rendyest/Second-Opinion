@@ -6,6 +6,9 @@
  * include request values.
  */
 
+/** Top-level fields the coach summary may carry. Consent text must describe each one. */
+export const ALLOWED_SUMMARY_KEYS = ['angles', 'duration_s', 'held_s', 'reached', 'system1', 'task'];
+
 const TOP_SIGNALS = ['stall', 'jitter', 'compensation', 'failed_range', 'drop'];
 const STATES = ['moving_well', 'hesitating', 'struggling', 'cant_see_you'];
 const MAX_STRING = 2000;

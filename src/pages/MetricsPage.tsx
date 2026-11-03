@@ -1,6 +1,9 @@
 import { MockTransport } from '../components/MockTransport';
+import { ClipRecorder } from '../components/ClipRecorder';
+import { ReplaySection } from '../components/ReplaySection';
 import { useMockStream } from '../mock/MockStreamContext';
 import { useGateDetails, useLiveStats, useReachDetails, type GateBoneDetails } from '../pose/liveStats';
+import { config as appConfig } from '../config';
 import type { System1State } from '../contracts';
 
 function fmt(v: number | null): string {
@@ -121,6 +124,8 @@ export function MetricsPage() {
           </>
         )}
       </section>
+      <ReplaySection mockEvents={player ? player.consumed() : []} />
+      <ClipRecorder enabled={appConfig.ui.dev_controls} />
     </div>
   );
 }

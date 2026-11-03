@@ -43,6 +43,18 @@ const GOOD_CONFIG = {
     anchor_smooth: 0.1,
   },
   coach: { timeout_ms: 10000, cooldown_ms: 60000, max_reply_chars: 300, summary_window_s: 10 },
+  metrics: { interval_s: 2, coverage_window_s: 3, record_max_s: 120 },
+  setup: {
+    check_enter_frames: 3,
+    check_exit_frames: 5,
+    edge_margin: 0.05,
+    brightness_min: 50,
+    brightness_max: 200,
+    tilt_max_deg: 10,
+    facing_tol: 0.25,
+    fps_window_s: 2,
+    fps_min: 15,
+  },
   baseline: { fixed_interval_s: 2 },
   ui: { readout_hz: 5, live_emit_hz: 30, dev_controls: false },
 };
@@ -243,6 +255,97 @@ describe('config coach section', () => {
 
   it('rejects a non-positive summary window', () => {
     expect(isAppConfig({ ...GOOD_CONFIG, coach: { ...GOOD_CONFIG.coach, summary_window_s: 0 } })).toBe(false);
+  });
+});
+
+describe('config metrics section', () => {
+  it('rejects a config missing the metrics section', () => {
+    const { metrics: _metrics, ...rest } = GOOD_CONFIG;
+    void _metrics;
+    expect(isAppConfig(rest)).toBe(false);
+  });
+
+  it('rejects a non-positive fixed interval', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, metrics: { ...GOOD_CONFIG.metrics, interval_s: 0 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-positive coverage window', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, metrics: { ...GOOD_CONFIG.metrics, coverage_window_s: -1 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-positive record limit', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, metrics: { ...GOOD_CONFIG.metrics, record_max_s: 0 } }),
+    ).toBe(false);
+  });
+});
+
+describe('config setup section', () => {
+  it('rejects a config missing the setup section', () => {
+    const { setup: _setup, ...rest } = GOOD_CONFIG;
+    void _setup;
+    expect(isAppConfig(rest)).toBe(false);
+  });
+
+  it('rejects a zero check enter count', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, check_enter_frames: 0 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-integer check exit count', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, check_exit_frames: 2.5 } }),
+    ).toBe(false);
+  });
+
+  it('rejects an edge margin at or beyond half the picture', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, edge_margin: 0.5 } }),
+    ).toBe(false);
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, edge_margin: -0.01 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a brightness range that runs backwards', () => {
+    expect(
+      isAppConfig({
+        ...GOOD_CONFIG,
+        setup: { ...GOOD_CONFIG.setup, brightness_min: 200, brightness_max: 50 },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects brightness outside luma range', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, brightness_max: 256 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a negative tilt limit', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, tilt_max_deg: -1 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a negative facing tolerance', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, facing_tol: -0.1 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-positive speed window or minimum', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, fps_window_s: 0 } }),
+    ).toBe(false);
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, setup: { ...GOOD_CONFIG.setup, fps_min: 0 } }),
+    ).toBe(false);
   });
 });
 

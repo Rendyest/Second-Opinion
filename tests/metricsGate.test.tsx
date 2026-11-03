@@ -138,3 +138,22 @@ describe('reach dev diagnostics live on /metrics, never on /session', () => {
     publishReachDetails(null);
   });
 });
+
+describe('loop comparison on /metrics, never on /session', () => {
+  it('shows no loop labels on the session page', () => {
+    const html = sessionMarkup();
+    for (const label of ['Loop comparison (dev)', 'Replay (dev)', 'Record a clip (dev)']) {
+      expect(html).not.toContain(label);
+    }
+  });
+
+  it('shows "No results yet" with no counters and no replay output', () => {
+    publishGateDetails(null);
+    publishReachDetails(null);
+    const html = metricsMarkup();
+    expect(html).toContain('No results yet');
+    expect(html).not.toContain('Calls saved');
+    expect(html).not.toContain('Gate flag rate');
+    expect(html).not.toContain('System 2');
+  });
+});

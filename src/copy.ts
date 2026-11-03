@@ -78,3 +78,26 @@ export const FACE_RETRY_LABEL = 'Retry face step';
 export const FACE_HOLD_LABEL = 'Calibrate hold';
 
 export const FACE_SKIP_LABEL = 'Continue without face step';
+
+export const STATUS_CAMERA_ON = 'Camera on';
+export const STATUS_CAMERA_OFF = 'Camera off';
+export const STATUS_RECORDING_ON = 'Recording on';
+export const STATUS_RECORDING_OFF = 'Recording off';
+export const STATUS_TIPS_ON = 'Tips on';
+export const STATUS_TIPS_OFF = 'Tips off';
+
+export const PAUSE_LABEL = 'Pause';
+export const RESUME_LABEL = 'Resume';
+export const PAUSED_NOTE = 'Paused';
+
+export const FINISH_LABEL = 'Finish session';
+export const FINISH_CONFIRM = 'Finish and stop the camera? Your recording stays in this browser until you download it.';
+export const FINISH_DOWNLOAD_LABEL = 'Download clip';
+export const FINISH_CLIPS_NEED = 'Turn on the face-masked clips choices to download.';
+
+export const EMERGENCY_STOP_LABEL = 'Stop recording now';
+export const EMERGENCY_STOPPED_NOTE = 'Recording stopped and not kept.';
+
+export const MARK_LABEL = 'Mark this moment';
+export const MARK_IDLE_LABEL = 'Not recording';
+export const MARK_DONE_NOTE = 'Moment marked.';

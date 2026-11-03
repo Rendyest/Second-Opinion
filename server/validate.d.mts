@@ -4,3 +4,5 @@ export interface CoachValidation {
 }
 
 export function validateCoachSummary(body: unknown): CoachValidation;
+
+export const ALLOWED_SUMMARY_KEYS: readonly string[];

@@ -50,6 +50,22 @@
     "max_reply_chars": 300,
     "summary_window_s": 10
   },
+  "metrics": {
+    "interval_s": 2,
+    "coverage_window_s": 3,
+    "record_max_s": 120
+  },
+  "setup": {
+    "check_enter_frames": 3,
+    "check_exit_frames": 5,
+    "edge_margin": 0.05,
+    "brightness_min": 50,
+    "brightness_max": 200,
+    "tilt_max_deg": 10,
+    "facing_tol": 0.25,
+    "fps_window_s": 2,
+    "fps_min": 15
+  },
   "baseline": {
     "fixed_interval_s": 2
   },
