@@ -24,6 +24,24 @@ export interface ConsentState extends ConsentChoices {
 export const CONSENT_TEXT_VERSION = 1;
 
 const STORAGE_KEY = 'mirra.consent.v1';
+const PROBE_KEY = 'mirra.consent.probe';
+
+/**
+ * True when a choice written now would still be there later. Never throws:
+ * private windows and locked-down browsers fail the probe instead of
+ * silently dropping every choice.
+ */
+export function storageWorks(): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    localStorage.setItem(PROBE_KEY, '1');
+    const ok = localStorage.getItem(PROBE_KEY) === '1';
+    localStorage.removeItem(PROBE_KEY);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 const ALL_OFF: ConsentChoices = {
   camera: false,

@@ -68,7 +68,7 @@ describe('setup evaluation failures', () => {
   it('camera off fails only the camera check', () => {
     const results = evaluateSetupChecks({ ...allPass(), cameraOn: false }, T);
     expect(byId(results, 'camera').pass).toBe(false);
-    expect(byId(results, 'camera').fix).toContain('Allow camera access');
+    expect(byId(results, 'camera').fix).toContain('Turn on camera for setup checks');
     for (const r of results) {
       if (r.id !== 'camera') expect(r.pass).toBe(true);
     }

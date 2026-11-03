@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { PoseFrame, System1StateName, TopSignal } from '../contracts';
 import { config } from '../config';
 import {
+  AUTO_TIPS_NOTE,
+  AUTO_TIPS_OFF,
+  AUTO_TIPS_ON,
   CHECKING_IN,
   COACH_BUTTON_LABEL,
   COACH_IMPORTED_HEADING,
@@ -11,8 +14,14 @@ import {
   COACH_SAFETY_NOTE,
   LIVE_TIP_NOTE,
   LOCAL_FALLBACK,
+  READ_ALOUD_NOTE,
+  READ_ALOUD_OFF,
+  READ_ALOUD_ON,
+  SPARK_ENABLE_LABEL,
   TASK_NAME,
 } from '../copy';
+import { loadAutoTips, saveAutoTips } from '../coach/autoTips';
+import { cancelSpeech, loadSpeakTips, saveSpeakTips, speakTip } from '../coach/speech';
 import { recordCoachCall, type CoachCallTrigger } from '../coach/coachCalls';
 import { validateCoachingTip, type CoachingTip } from '../coach/coachingImport';
 import { canSendSummary, type ConsentChoices } from '../consent/consent';
@@ -41,13 +50,21 @@ interface CoachPanelProps {
   consent?: ConsentChoices;
   /** While paused nothing is sent: requests are skipped, never queued. */
   paused?: boolean;
+  /**
+   * Opt-in handler: pressing it ticks the cloud-summary choice itself, so it
+   * is an explicit enable. Without it the panel shows the tips-off note.
+   */
+  onEnableSpark?: () => void;
 }
 
 type CoachStatus = 'idle' | 'escalating' | 'delivered' | 'fallback';
 
 /**
  * Participant coaching panel. Idle, escalating ("Checking in..."), delivered,
- * or local fallback, with a cooldown after every call. The request body is
+ * or local fallback, with a cooldown after every call. Automatic tips are on
+ * by default: struggle escalations fetch on their own, and the toggle leaves
+ * only the hand-pressed button. Shown tips are read aloud unless sound is
+ * turned off. The request body is
  * only the aggregate summary (task, per-angle min/max/mean, duration, System 1
  * state) — never joints, frames, or images. Failures and timeouts fall back
  * to a local message and are logged to the console only, without the summary
@@ -64,10 +81,33 @@ export function CoachPanel({
   statsEpoch,
   consent,
   paused = false,
+  onEnableSpark,
 }: CoachPanelProps) {
   const summaryOn = consent === undefined ? true : canSendSummary(consent);
   const summaryOnRef = useRef(summaryOn);
   summaryOnRef.current = summaryOn;
+  // Automatic coaching is the default: struggle escalations fetch a tip on
+  // their own. Turning it off leaves only the hand-pressed button.
+  const [autoTips, setAutoTips] = useState(loadAutoTips);
+  const autoTipsRef = useRef(autoTips);
+  autoTipsRef.current = autoTips;
+  const toggleAutoTips = () => {
+    setAutoTips((prev) => {
+      const next = !prev;
+      saveAutoTips(next);
+      return next;
+    });
+  };
+  // Spoken coaching is the default: sound on unless turned off.
+  const [speakTips, setSpeakTips] = useState(loadSpeakTips);
+  const toggleSpeech = () => {
+    setSpeakTips((prev) => {
+      const next = !prev;
+      saveSpeakTips(next);
+      if (!next) cancelSpeech();
+      return next;
+    });
+  };
   const [stats, setStats] = useState<AngleStats | null>(null);
   const [status, setStatus] = useState<CoachStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -139,12 +179,13 @@ export function CoachPanel({
   // An escalation asks once per new id, even when blocked (the id is
   // recorded first, so a blocked escalation never re-fires later). A
   // tracking gap never starts one: the button stays disabled instead.
-  // While paused the id is still recorded, but no request goes out.
+  // While paused, or with automatic tips off, the id is still recorded,
+  // but no request goes out.
   useEffect(() => {
     const next = nextEscalation(escalationId, lastHandledEscalation.current);
     if (next === null) return;
     lastHandledEscalation.current = next;
-    if (paused) return;
+    if (paused || !autoTipsRef.current) return;
     void request('escalation');
     // Runs every render on purpose: the id change, not the inputs, triggers it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,6 +195,16 @@ export function CoachPanel({
     setStatus('idle');
     setMessage(null);
   };
+
+  // Spoken coaching: every shown tip is read aloud unless sound is off.
+  // Cleanup stops the voice on dismiss, a new request, or unmount — speech
+  // never blocks the session. Imported script tips are not spoken.
+  useEffect(() => {
+    if (!speakTips) return;
+    if (status === 'delivered' && message !== null) speakTip(message);
+    else if (status === 'fallback') speakTip(LOCAL_FALLBACK);
+    return () => cancelSpeech();
+  }, [status, message, speakTips]);
 
   const blocked = cantSeeYouActive || cooling || paused;
 
@@ -186,9 +237,31 @@ export function CoachPanel({
         </section>
       )}
       <div className="button-row">
-        <button type="button" onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
-          {summaryOn ? COACH_BUTTON_LABEL : CONSENT_TIPS_OFF_NOTE}
+        <button type="button" onClick={toggleAutoTips} aria-pressed={autoTips}>
+          {autoTips ? AUTO_TIPS_ON : AUTO_TIPS_OFF}
         </button>
+      </div>
+      {autoTips && <p>{AUTO_TIPS_NOTE}</p>}
+      <div className="button-row">
+        <button type="button" onClick={toggleSpeech} aria-pressed={speakTips}>
+          {speakTips ? READ_ALOUD_ON : READ_ALOUD_OFF}
+        </button>
+      </div>
+      {speakTips && <p>{READ_ALOUD_NOTE}</p>}
+      <div className="button-row">
+        {summaryOn ? (
+          <button type="button" onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
+            {COACH_BUTTON_LABEL}
+          </button>
+        ) : onEnableSpark ? (
+          <button type="button" onClick={onEnableSpark}>
+            {SPARK_ENABLE_LABEL}
+          </button>
+        ) : (
+          <button type="button" onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
+            {CONSENT_TIPS_OFF_NOTE}
+          </button>
+        )}
       </div>
       <div>
         <label>

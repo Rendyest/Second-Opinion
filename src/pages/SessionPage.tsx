@@ -191,6 +191,24 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
         />
       )}
 
+      {source === 'live' && (
+        <section aria-label="Camera controls">
+          <h2>Camera</h2>
+          <p aria-live="polite">{statusText(live.status)}</p>
+          {live.error && <p role="alert">{live.error}</p>}
+          {live.error && <p>Mock replay still works — switch Picture source back to Mock replay.</p>}
+          <div className="button-row">
+            <button type="button" onClick={live.start} disabled={live.status === 'loading' || live.status === 'live'}>
+              Start camera
+            </button>
+            <button type="button" onClick={live.stop} disabled={live.status !== 'live' && live.status !== 'loading'}>
+              Stop camera
+            </button>
+          </div>
+          <p>Pose runs on this laptop only. No pictures leave your machine in this slice.</p>
+        </section>
+      )}
+
       <ErrorBoundary>
         <VideoStage
           frame={effectiveFrame}
@@ -199,6 +217,11 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
           dimBelowConf={config.gate.vis_min}
           videoRef={live.videoRef}
           cameraOn={cameraOn}
+          cameraHint={
+            source === 'live'
+              ? 'Camera off — press Start camera below to turn on your camera.'
+              : undefined
+          }
           uncalibrated={calibration.baseline === null}
         />
       </ErrorBoundary>
@@ -230,6 +253,7 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
         statsEpoch={`${source}|${live.status}|${calibration.baseline === null ? 'none' : 'cal'}|${cantSeeEpisodes}`}
         consent={consent}
         paused={paused}
+        onEnableSpark={() => setConsent('cloud_summary', true)}
       />
 
       <SessionControls
@@ -244,24 +268,6 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
       />
 
       {source === 'mock' && devControls && <MockTransport />}
-
-      {source === 'live' && (
-        <section aria-label="Camera controls">
-          <h2>Camera</h2>
-          <p aria-live="polite">{statusText(live.status)}</p>
-          {live.error && <p role="alert">{live.error}</p>}
-          {live.error && <p>Mock replay still works — switch Picture source back to Mock replay.</p>}
-          <div className="button-row">
-            <button type="button" onClick={live.start} disabled={live.status === 'loading' || live.status === 'live'}>
-              Start camera
-            </button>
-            <button type="button" onClick={live.stop} disabled={live.status !== 'live' && live.status !== 'loading'}>
-              Stop camera
-            </button>
-          </div>
-          <p>Pose runs on this laptop only. No pictures leave your machine in this slice.</p>
-        </section>
-      )}
     </div>
   );
 }

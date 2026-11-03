@@ -197,7 +197,7 @@ export function evaluateSetupChecks(
     label: SETUP_CHECK_LABEL.camera,
     pass: m.cameraOn,
     advisory: false,
-    fix: m.cameraOn ? null : 'Allow camera access in your browser, then try again.',
+    fix: m.cameraOn ? null : 'First press “Turn on camera for setup checks”, then try again.',
   });
 
   results.push({
@@ -280,8 +280,8 @@ export function evaluateSetupChecks(
     fix: calibrationPass
       ? null
       : !m.armCalibrated
-        ? 'Finish the arm step above, or continue without it.'
-        : 'Finish the face step above, or continue without it.',
+        ? 'Finish the arm step below, or continue without it.'
+        : 'Finish the face step below, or continue without it.',
   });
 
   return results;

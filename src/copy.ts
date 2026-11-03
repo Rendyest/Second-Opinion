@@ -46,6 +46,20 @@ export const LIVE_TIP_NOTE = 'Live tip from the cloud model.';
 
 export const COACH_BUTTON_LABEL = 'Get a tip';
 
+export const AUTO_TIPS_ON = 'Automatic tips: on';
+
+export const AUTO_TIPS_OFF = 'Automatic tips: off';
+
+export const AUTO_TIPS_NOTE = 'You get a tip when struggling, without pressing anything.';
+
+export const READ_ALOUD_ON = 'Read tips aloud: on';
+
+export const READ_ALOUD_OFF = 'Read tips aloud: off';
+
+export const READ_ALOUD_NOTE = 'Tips are read aloud. Turn sound off to silence them.';
+
+export const SPARK_ENABLE_LABEL = 'Enable Spark coaching';
+
 export const COACH_IMPORT_LABEL = 'Show a tip from a file';
 
 export const COACH_IMPORT_BAD_FILE = 'That file is not a coaching tip.';

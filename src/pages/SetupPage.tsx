@@ -6,7 +6,7 @@ import { SetupChecks } from '../components/SetupChecks';
 import { MockTransport } from '../components/MockTransport';
 import { useConsent } from '../consent/consent';
 
-/** Participant route. Consent choices first, then the arm and face steps. No dashboards here. */
+/** Participant route. Consent, then the checks camera, then the arm and face steps. No dashboards here. */
 export function SetupPage() {
   const { consent, set: setConsent } = useConsent();
   return (
@@ -16,10 +16,20 @@ export function SetupPage() {
         Welcome. When sessions begin, the task will be <strong>wash your face with the face towel</strong>,
         guided at your own pace. You can pause or stop at any time — no explanation needed.
       </p>
+      <p>
+        Work down this page in order. First press Turn on camera for setup checks, then do the
+        arm and face steps below. Each step turns on its own camera picture when you press its
+        button, and a picture goes dark again when its step finishes; the pass or fail line is
+        the result.
+      </p>
       <ConsentForm consent={consent} onChange={setConsent} />
       <SetupChecks />
       <CalibrationStep />
       <FaceReachStep />
+      <p>
+        When the arm and face steps are done, press <a href="#setup-checks">Start session</a> in
+        the setup checks to begin.
+      </p>
       <DeleteMyClips />
       <MockTransport />
       <p>This page makes no cloud calls.</p>

@@ -456,4 +456,9 @@ describe('session live branch (no camera)', () => {
     expect(html).toContain('Skeleton:');
     expect(html).toContain('Mirror:');
   });
+
+  it('names the start button on the black stage in the live branch only', () => {
+    expect(liveMarkup()).toContain('press Start camera below to turn on your camera');
+    expect(sessionMarkup()).not.toContain('press Start camera below');
+  });
 });

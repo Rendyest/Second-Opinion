@@ -68,8 +68,15 @@ with its outcome (live or fallback), so judges can see each real call.
 To enable live calls (two shells, from the repo root):
 
 ```
-# Shell 1 — put real values in .env (see .env.example, never commit it),
-# then start the coach proxy (default port 8787):
+# Shell 1 — create .env from the example, then open it in an editor and
+# fill in the two required values: MUSE_SPARK_API_KEY is the key you were
+# issued, MUSE_SPARK_BASE_URL is the Muse Spark endpoint URL you were
+# given. COACH_PORT is optional (default 8787).
+# Windows (PowerShell): Copy-Item .env.example .env
+# macOS/Linux:          cp .env.example .env
+# .env is gitignored (only .env.example is committed), so the real values
+# never leave your machine via git. The proxy refuses to start if either
+# required value is missing — that is the check that your .env is right.
 npm run coach-proxy
 
 # Shell 2 — start the app (the dev server forwards /api/coach to the proxy):
@@ -78,5 +85,8 @@ npm run dev
 
 Then tick "Allow short summaries of my movement to be sent to the cloud
 model" in consent, and either press "Get a tip" or let a struggle flag
-fire. Without the proxy running, tips fall back locally and the log shows
-"Local fallback tip" — no key or provider URL ever lives in client code.
+fire. Automatic tips are on by default, so a struggle flag fetches a tip
+without pressing anything; the toggle in the Coaching section turns that
+off, leaving only the hand-pressed button. Without the proxy running, tips
+fall back locally and the log shows "Local fallback tip" — no key or
+provider URL ever lives in client code.

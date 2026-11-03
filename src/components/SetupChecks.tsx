@@ -85,7 +85,7 @@ export function SetupCheckList({
 }) {
   const startBlockedNow = blocked.length > 0;
   return (
-    <section aria-label="Setup checks">
+    <section aria-label="Setup checks" id="setup-checks">
       <h2>Setup checks</h2>
       <ul>
         {results.map((r) => (
@@ -243,7 +243,7 @@ export function SetupChecks() {
             onClick={live.start}
             disabled={live.status === 'loading'}
           >
-            Turn on camera
+            Turn on camera for setup checks
           </button>
         </div>
       )}

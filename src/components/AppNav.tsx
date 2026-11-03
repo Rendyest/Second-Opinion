@@ -13,7 +13,7 @@ export function AppNav() {
   const snap = snapshot ?? { cursor: 0, total: 0, playing: false };
   return (
     <header className="app-header">
-      <p className="app-title">Second Opinion — coaching loop (MVP slice 1)</p>
+      <p className="app-title">Second Opinion — coaching loop</p>
       <nav aria-label="Primary">
         <ul className="nav-list">
           <li>

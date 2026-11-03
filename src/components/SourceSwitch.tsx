@@ -28,7 +28,7 @@ export function SourceSwitch({ value, onChange }: SourceSwitchProps) {
           checked={value === 'live'}
           onChange={() => onChange('live')}
         />{' '}
-        Live camera (MediaPipe Pose)
+        <strong>Select for Live camera</strong>
       </label>
     </fieldset>
   );

@@ -15,6 +15,11 @@ interface VideoStageProps {
   /** Live camera element. Detached (no stream) in mock mode. */
   videoRef: RefObject<HTMLVideoElement>;
   cameraOn: boolean;
+  /**
+   * Overrides the "camera off" placeholder. The live branch names the exact
+   * button that turns the camera on; mock mode keeps the default text.
+   */
+  cameraHint?: string;
   /** No stored calibration: the gate runs visibility-only and is less reliable. */
   uncalibrated?: boolean;
 }
@@ -87,6 +92,7 @@ export function VideoStage({
   dimBelowConf,
   videoRef,
   cameraOn,
+  cameraHint,
   uncalibrated = false,
 }: VideoStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -173,7 +179,11 @@ export function VideoStage({
         playsInline
         aria-label="Camera picture"
       />
-      {!cameraOn && <p className="stage-placeholder">Camera off — showing mock replay skeleton.</p>}
+      {!cameraOn && (
+        <p className="stage-placeholder">
+          {cameraHint ?? 'Camera off — showing mock replay skeleton.'}
+        </p>
+      )}
       <canvas ref={canvasRef} className="stage-canvas" aria-hidden="true" />
       {frame && (
         <p role="status" className={frame.gate.ok ? 'gate-badge gate-ok' : 'gate-badge gate-bad'}>

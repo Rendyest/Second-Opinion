@@ -1,4 +1,5 @@
-import { canRecord } from '../consent/consent';
+import { useState } from 'react';
+import { canRecord, storageWorks } from '../consent/consent';
 import type { ConsentKey, ConsentState } from '../consent/consent';
 import {
   CONSENT_CAMERA_LABEL,
