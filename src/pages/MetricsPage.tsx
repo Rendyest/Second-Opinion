@@ -1,5 +1,6 @@
 import { MockTransport } from '../components/MockTransport';
 import { ClipRecorder } from '../components/ClipRecorder';
+import { CoachCallLog } from '../components/CoachCallLog';
 import { ReplaySection } from '../components/ReplaySection';
 import { useMockStream } from '../mock/MockStreamContext';
 import { useGateDetails, useLiveStats, useReachDetails, type GateBoneDetails } from '../pose/liveStats';
@@ -124,6 +125,7 @@ export function MetricsPage() {
           </>
         )}
       </section>
+      <CoachCallLog />
       <ReplaySection mockEvents={player ? player.consumed() : []} />
       <ClipRecorder enabled={appConfig.ui.dev_controls} />
     </div>

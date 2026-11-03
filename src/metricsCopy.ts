@@ -89,3 +89,10 @@ export const EXPORT_JSON_LABEL = 'Download results (JSON)';
 export const EXPORT_CSV_LABEL = 'Download results (CSV)';
 export const LOG_SCALE_LABEL = 'Log scale';
 export const CHART_TITLE = 'Cumulative calls per policy';
+
+export const COACH_CALLS_SECTION_TITLE = 'Cloud-model tips (dev)';
+export const COACH_CALLS_EMPTY = 'No tips yet.';
+export const COACH_CALLS_LIVE = 'Live tip from the cloud model';
+export const COACH_CALLS_FALLBACK = 'Local fallback tip';
+export const COACH_CALLS_TRIGGER_ESCALATION = 'on a struggle flag';
+export const COACH_CALLS_TRIGGER_BUTTON = 'on the Get a tip button';

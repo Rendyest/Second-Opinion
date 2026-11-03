@@ -41,6 +41,9 @@ export const CHECKING_IN = 'Checking in...';
 
 export const LOCAL_FALLBACK = 'Take your time. Try slowing down.';
 
+/** Shown under a delivered tip that answered from the live cloud model. */
+export const LIVE_TIP_NOTE = 'Live tip from the cloud model.';
+
 export const COACH_BUTTON_LABEL = 'Get a tip';
 
 export const COACH_IMPORT_LABEL = 'Show a tip from a file';

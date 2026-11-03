@@ -57,3 +57,26 @@ Check the plumbing with `npm test -- tests/demoData.test.ts`, which
 generates into a temp folder, validates every output, and scores it.
 
 Synthetic demo data only — never use its figures for reported results.
+
+## Live Muse tips (real cloud-model calls)
+
+Delivered tips carry a "Live tip from the cloud model." note; when the
+proxy is unreachable the panel shows the local fallback instead, and every
+completed attempt is listed under "Cloud-model tips (dev)" on `/metrics`
+with its outcome (live or fallback), so judges can see each real call.
+
+To enable live calls (two shells, from the repo root):
+
+```
+# Shell 1 — put real values in .env (see .env.example, never commit it),
+# then start the coach proxy (default port 8787):
+npm run coach-proxy
+
+# Shell 2 — start the app (the dev server forwards /api/coach to the proxy):
+npm run dev
+```
+
+Then tick "Allow short summaries of my movement to be sent to the cloud
+model" in consent, and either press "Get a tip" or let a struggle flag
+fire. Without the proxy running, tips fall back locally and the log shows
+"Local fallback tip" — no key or provider URL ever lives in client code.

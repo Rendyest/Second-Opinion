@@ -9,9 +9,11 @@ import {
   COACH_IMPORT_LABEL,
   COACH_PAIN_NOTE,
   COACH_SAFETY_NOTE,
+  LIVE_TIP_NOTE,
   LOCAL_FALLBACK,
   TASK_NAME,
 } from '../copy';
+import { recordCoachCall, type CoachCallTrigger } from '../coach/coachCalls';
 import { validateCoachingTip, type CoachingTip } from '../coach/coachingImport';
 import { canSendSummary, type ConsentChoices } from '../consent/consent';
 import { CONSENT_TIPS_OFF_NOTE } from '../consentCopy';
@@ -49,7 +51,9 @@ type CoachStatus = 'idle' | 'escalating' | 'delivered' | 'fallback';
  * only the aggregate summary (task, per-angle min/max/mean, duration, System 1
  * state) — never joints, frames, or images. Failures and timeouts fall back
  * to a local message and are logged to the console only, without the summary
- * values, and never block the session.
+ * values, and never block the session. Every completed attempt is recorded
+ * in the coach call log for the reviewer page; a delivered tip also carries
+ * a short note naming it as a live cloud-model tip.
  */
 export function CoachPanel({
   frame,
@@ -102,7 +106,7 @@ export function CoachPanel({
     }
   }, [summaryOn]);
 
-  const request = async () => {
+  const request = async (trigger: CoachCallTrigger) => {
     if (paused || status === 'escalating' || !canRequestCoach(cantSeeYouActive, cooling)) return;
     if (!summaryOnRef.current) {
       setStatus('fallback');
@@ -117,6 +121,9 @@ export function CoachPanel({
       setStatus('idle');
       return;
     }
+    // Every completed attempt enters the reviewer log on /metrics: a proxy
+    // success is a live cloud-model tip, anything else is the local fallback.
+    recordCoachCall({ trigger, state: systemState, topSignal, outcome: result.ok ? 'live' : 'fallback' });
     if (result.ok) {
       setMessage(result.message);
       setHistory((prev) => [...prev.slice(-4), result.message]);
@@ -138,7 +145,7 @@ export function CoachPanel({
     if (next === null) return;
     lastHandledEscalation.current = next;
     if (paused) return;
-    void request();
+    void request('escalation');
     // Runs every render on purpose: the id change, not the inputs, triggers it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   });
@@ -154,7 +161,12 @@ export function CoachPanel({
     <section aria-label="Coaching">
       <h2>Coaching</h2>
       {status === 'escalating' && <p aria-live="polite">{CHECKING_IN}</p>}
-      {status === 'delivered' && message !== null && <p className="coach-message">{message}</p>}
+      {status === 'delivered' && message !== null && (
+        <>
+          <p className="coach-message">{message}</p>
+          <p>{LIVE_TIP_NOTE}</p>
+        </>
+      )}
       {status === 'fallback' && <p>{LOCAL_FALLBACK}</p>}
       {(status === 'delivered' || status === 'fallback') && (
         <div className="button-row">
@@ -174,7 +186,7 @@ export function CoachPanel({
         </section>
       )}
       <div className="button-row">
-        <button type="button" onClick={request} disabled={blocked || status === 'escalating'}>
+        <button type="button" onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
           {summaryOn ? COACH_BUTTON_LABEL : CONSENT_TIPS_OFF_NOTE}
         </button>
       </div>
