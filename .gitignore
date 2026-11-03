@@ -36,6 +36,9 @@ clips/
 *.mp3
 *.m4a
 
+# Reported validation aggregates (built, never committed)
+results/
+
 # Model weights
 weights/
 *.pt

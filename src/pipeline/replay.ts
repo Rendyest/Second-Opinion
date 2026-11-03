@@ -1,4 +1,4 @@
-import type { PoseFrame, RecordedClip, ReplayEvent } from '../contracts';
+import type { ClipSource, PoseFrame, RecordedClip, ReplayEvent } from '../contracts';
 import { elbowFlexion, shoulderElevation, type Joint } from '../pose/angles';
 import { createPipeline, type PipelineThresholds } from './run';
 import { everyFrameCalls, fixedIntervalCalls, gatedTriggerCalls } from './policies';
@@ -49,7 +49,7 @@ export interface PolicyResult {
 
 export interface ReplaySummary {
   clipName: string;
-  source: 'recorded' | 'synthetic';
+  source: ClipSource;
   calibrated: boolean;
   durationS: number;
   frames: number;

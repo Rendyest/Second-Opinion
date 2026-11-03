@@ -43,7 +43,7 @@ const GOOD_CONFIG = {
     anchor_smooth: 0.1,
   },
   coach: { timeout_ms: 10000, cooldown_ms: 60000, max_reply_chars: 300, summary_window_s: 10 },
-  metrics: { interval_s: 2, coverage_window_s: 3, record_max_s: 120 },
+  metrics: { interval_s: 2, coverage_window_s: 3, record_max_s: 120, import_min_frames_per_s: 15 },
   review: { note_max_chars: 200, blind_default: true },
   setup: {
     check_enter_frames: 3,
@@ -281,6 +281,12 @@ describe('config metrics section', () => {
   it('rejects a non-positive record limit', () => {
     expect(
       isAppConfig({ ...GOOD_CONFIG, metrics: { ...GOOD_CONFIG.metrics, record_max_s: 0 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-positive import picture floor', () => {
+    expect(
+      isAppConfig({ ...GOOD_CONFIG, metrics: { ...GOOD_CONFIG.metrics, import_min_frames_per_s: 0 } }),
     ).toBe(false);
   });
 });

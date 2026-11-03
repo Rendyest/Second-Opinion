@@ -53,7 +53,8 @@
   "metrics": {
     "interval_s": 2,
     "coverage_window_s": 3,
-    "record_max_s": 120
+    "record_max_s": 120,
+    "import_min_frames_per_s": 15
   },
   "setup": {
     "check_enter_frames": 3,

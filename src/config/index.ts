@@ -59,6 +59,7 @@ export interface AppConfig {
     interval_s: number;
     coverage_window_s: number;
     record_max_s: number;
+    import_min_frames_per_s: number;
   };
   setup: {
     check_enter_frames: number;
@@ -237,7 +238,9 @@ function isMetrics(v: unknown): v is AppConfig['metrics'] {
     isNum(v['coverage_window_s']) &&
     (v['coverage_window_s'] as number) > 0 &&
     isNum(v['record_max_s']) &&
-    (v['record_max_s'] as number) > 0
+    (v['record_max_s'] as number) > 0 &&
+    isNum(v['import_min_frames_per_s']) &&
+    (v['import_min_frames_per_s'] as number) > 0
   );
 }
 

@@ -35,6 +35,16 @@ export function buildClip(args: {
   labels: Array<{ start_s: number; end_s: number }>;
   source: RecordedClip['source'];
   marks?: number[];
+  /**
+   * Set only by the dev video import. Absent for live recordings, so their
+   * JSON is byte-for-byte what it was before this feature.
+   */
+  imported?: {
+    view: 'front' | 'side';
+    targetShoulderDeg: number;
+    hold: { start_s: number; end_s: number };
+    video: { durationS: number; frames: number; fps: number | null };
+  };
 }): RecordedClip {
   const clip: RecordedClip = {
     version: 1,
@@ -51,6 +61,19 @@ export function buildClip(args: {
   };
   if (args.marks !== undefined && args.marks.length > 0) {
     clip.marks = args.marks.map(round4);
+  }
+  if (args.imported !== undefined) {
+    clip.view = args.imported.view;
+    clip.target_shoulder_deg = round4(args.imported.targetShoulderDeg);
+    clip.hold = {
+      start_s: round4(args.imported.hold.start_s),
+      end_s: round4(args.imported.hold.end_s),
+    };
+    clip.video = {
+      duration_s: round4(args.imported.video.durationS),
+      frames: args.imported.video.frames,
+      fps: args.imported.video.fps,
+    };
   }
   if (!isRecordedClip(clip)) throw new Error('built clip failed validation');
   return clip;

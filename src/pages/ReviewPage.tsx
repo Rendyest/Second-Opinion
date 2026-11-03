@@ -70,7 +70,10 @@ export function ReviewPage() {
             next = parseReviewBundle(json);
           } else {
             const recorded = parseRecordedClip(json);
-            next = { version: 1 as const, source: recorded.source, clips: [reviewClipFromRecorded(recorded)] };
+            // The review bundle only knows recorded/synthetic: an imported
+            // video is a recording, so it loads as one.
+            const bundleSource = recorded.source === 'imported_video' ? 'recorded' : recorded.source;
+            next = { version: 1 as const, source: bundleSource, clips: [reviewClipFromRecorded(recorded)] };
           }
           setLoadedBundle(next);
           setSelectedId(null);

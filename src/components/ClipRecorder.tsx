@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildClip, type ClipSample } from '../pipeline/clip';
+import { VideoImport } from './VideoImport';
 import { config } from '../config';
 import { useLivePose } from '../pose/useLivePose';
 import { statusText } from '../pose/statusText';
@@ -230,6 +231,7 @@ export function ClipRecorder({ enabled }: { enabled: boolean }) {
           </div>
         </>
       )}
+      <VideoImport />
     </section>
   );
 }

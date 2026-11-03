@@ -1,0 +1,40 @@
+{
+  "_example": "NOT REAL DATA",
+  "schemaVersion": 1,
+  "generatedAt": "2099-01-01T00:00:00.000Z",
+  "reference": "Posed target angle (nominal)",
+  "thresholds_tuned_on_reported_clips": false,
+  "recordedSet": {
+    "n_clips": 99,
+    "n_participants": 99,
+    "n_frames_in_hold": 9999,
+    "n_frames_outside_hold": 9999,
+    "n_unlabelled_frames": 9999
+  },
+  "shoulder": [
+    {
+      "view": "front",
+      "target_deg": 90,
+      "n_gated_ok": 999,
+      "mae_deg_gated_ok": 88.8,
+      "bias_deg_gated_ok": 77.7,
+      "n_all": 999,
+      "mae_deg_all": 88.8,
+      "bias_deg_all": 77.7
+    }
+  ],
+  "elbow": {
+    "target_deg": 180,
+    "label": "straight arm only",
+    "n_gated_ok": 999,
+    "mae_deg_gated_ok": 88.8,
+    "bias_deg_gated_ok": 77.7,
+    "n_all": 999,
+    "mae_deg_all": 88.8,
+    "bias_deg_all": 77.7
+  },
+  "gate": {
+    "flagged": 999,
+    "total": 999
+  }
+}

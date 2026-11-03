@@ -162,9 +162,27 @@ export interface ClipLabel {
   end_s: number;
 }
 
+export type ClipSource = 'recorded' | 'synthetic' | 'imported_video';
+
+/** Camera view at import time, stored with the clip. */
+export type ClipView = 'front' | 'side';
+
+/** Hold window in video seconds, stored with an imported clip. */
+export interface ClipHold {
+  start_s: number;
+  end_s: number;
+}
+
+/** Provenance of an imported video. fps is null when it could not be read. */
+export interface ClipVideoInfo {
+  duration_s: number;
+  frames: number;
+  fps: number | null;
+}
+
 export interface RecordedClip {
   version: 1;
-  source: 'recorded' | 'synthetic';
+  source: ClipSource;
   name: string;
   fps: number;
   frames: ClipFrame[];
@@ -177,6 +195,14 @@ export interface RecordedClip {
   marks?: number[];
   /** Written by the recorders after the recording-consent gate. */
   consent?: { recording: boolean };
+  /** Set only by the dev video import: the required import fields. */
+  view?: ClipView;
+  /** Set only by the dev video import: target shoulder angle, degrees 0-180. */
+  target_shoulder_deg?: number;
+  /** Set only by the dev video import: hold window in video seconds. */
+  hold?: ClipHold;
+  /** Set only by the dev video import: video provenance, never any media. */
+  video?: ClipVideoInfo;
 }
 
 const CLIP_KEYS: readonly string[] = [
@@ -191,6 +217,10 @@ const CLIP_KEYS: readonly string[] = [
   'labels',
   'marks',
   'consent',
+  'view',
+  'target_shoulder_deg',
+  'hold',
+  'video',
 ];
 
 /** True for any string that smells like embedded image data. */
@@ -256,13 +286,25 @@ export function isClipFace(v: unknown): v is NonNullable<RecordedClip['face']> {
   );
 }
 
+function isClipVideoInfo(v: unknown): v is ClipVideoInfo {
+  if (!isRecord(v)) return false;
+  const keys = Object.keys(v);
+  if (keys.length !== 3 || !keys.includes('duration_s') || !keys.includes('frames') || !keys.includes('fps')) {
+    return false;
+  }
+  if (!isFiniteNum(v['duration_s']) || (v['duration_s'] as number) < 0) return false;
+  if (!isFiniteNum(v['frames']) || !Number.isInteger(v['frames']) || (v['frames'] as number) < 0) return false;
+  const fps = v['fps'];
+  return fps === null || (isFiniteNum(fps) && (fps as number) > 0);
+}
+
 export function isRecordedClip(v: unknown): v is RecordedClip {
   if (!isRecord(v)) return false;
   for (const key of Object.keys(v)) {
     if (!CLIP_KEYS.includes(key)) return false;
   }
   if (v['version'] !== 1) return false;
-  if (v['source'] !== 'recorded' && v['source'] !== 'synthetic') return false;
+  if (v['source'] !== 'recorded' && v['source'] !== 'synthetic' && v['source'] !== 'imported_video') return false;
   if (typeof v['name'] !== 'string' || (v['name'] as string).length === 0) return false;
   if (!isFiniteNum(v['fps']) || (v['fps'] as number) <= 0) return false;
   if (!Array.isArray(v['frames']) || !(v['frames'] as unknown[]).every(isClipFrame)) return false;
@@ -288,6 +330,13 @@ export function isRecordedClip(v: unknown): v is RecordedClip {
       return false;
     }
   }
+  if (v['view'] !== undefined && v['view'] !== 'front' && v['view'] !== 'side') return false;
+  if (v['target_shoulder_deg'] !== undefined) {
+    const deg = v['target_shoulder_deg'];
+    if (!isFiniteNum(deg) || (deg as number) < 0 || (deg as number) > 180) return false;
+  }
+  if (v['hold'] !== undefined && !isClipLabel(v['hold'])) return false;
+  if (v['video'] !== undefined && !isClipVideoInfo(v['video'])) return false;
   return !containsImageData(v);
 }
 

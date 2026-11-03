@@ -14,6 +14,7 @@ import {
   NO_LABELS,
   NO_RESULTS,
   REPLAY_CALIBRATED,
+  REPLAY_SOURCE_IMPORTED,
   REPLAY_SOURCE_RECORDED,
   REPLAY_SOURCE_SYNTHETIC,
   REPLAY_UNCALIBRATED,
@@ -95,7 +96,12 @@ export function LoopMetricsPanel({ summary }: { summary: ReplaySummary | null })
     <section aria-label="Loop comparison (dev)">
       <h2>{LOOP_SECTION_TITLE}</h2>
       <p>
-        Source: {summary.source === 'recorded' ? REPLAY_SOURCE_RECORDED : REPLAY_SOURCE_SYNTHETIC} ·{' '}
+        Source:{' '}
+        {summary.source === 'recorded'
+          ? REPLAY_SOURCE_RECORDED
+          : summary.source === 'imported_video'
+            ? REPLAY_SOURCE_IMPORTED
+            : REPLAY_SOURCE_SYNTHETIC}{' '}·{' '}
         {summary.calibrated ? REPLAY_CALIBRATED : REPLAY_UNCALIBRATED} · {summary.clipName}
       </p>
       <p>{BASELINE_NOTE}</p>
