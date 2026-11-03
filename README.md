@@ -28,3 +28,32 @@
 - Participant routes show no counters or dashboards; reviewer numbers on `/metrics` are labeled replay demos until slice 5.
 
 Waiting for your "next" before slice 2.
+
+## Judge demo data (synthetic clips for the reviewer routes)
+
+Judges can exercise `/metrics`, `/review` and `/validation` without
+recording anything: `scripts/make-demo-data.mjs` generates deterministic
+synthetic clips (no real-person data — every joint comes from an arm model
+raising to a target angle, so output is reproducible).
+
+Generate the data (defaults to `scripts/clips/demo/`, which is gitignored
+and can never be committed):
+
+```
+node scripts/make-demo-data.mjs
+node scripts/make-results.mjs scripts/clips/demo
+```
+
+Then, in the app:
+
+1. `/metrics` → Replay → Choose a clip file → any `demo-*.json`
+   (`demo-front-90.json`, `demo-side-90.json`, `demo-front-45.json`).
+2. `/review` → Choose a review bundle file → `review-bundle.json`
+   (one clip carries a demo Muse label for the blind/assist flow; the
+   other two have none, exercising the labeled path).
+3. `/validation` reads the generated `results/results.json`.
+
+Check the plumbing with `npm test -- tests/demoData.test.ts`, which
+generates into a temp folder, validates every output, and scores it.
+
+Synthetic demo data only — never use its figures for reported results.
