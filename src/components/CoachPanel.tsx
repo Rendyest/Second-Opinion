@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PoseFrame, System1StateName, TopSignal } from '../contracts';
 import { config } from '../config';
 import {
@@ -14,6 +14,7 @@ import {
   TASK_NAME,
 } from '../copy';
 import { recordCoachCall, type CoachCallTrigger } from '../coach/coachCalls';
+import type { SessionCoachOutcome } from '../metrics/sessionSummary';
 import { validateCoachingTip, type CoachingTip } from '../coach/coachingImport';
 import { canSendSummary, type ConsentChoices } from '../consent/consent';
 import { CONSENT_TIPS_OFF_NOTE } from '../consentCopy';
@@ -41,9 +42,12 @@ interface CoachPanelProps {
   consent?: ConsentChoices;
   /** While paused nothing is sent: requests are skipped, never queued. */
   paused?: boolean;
+  active?: boolean;
+  onOutcome?: (trigger: CoachCallTrigger, outcome: SessionCoachOutcome) => void;
 }
 
 type CoachStatus = 'idle' | 'escalating' | 'delivered' | 'fallback';
+const useRequestLifecycle = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
  * Participant coaching panel. Idle, escalating ("Checking in..."), delivered,
@@ -64,10 +68,11 @@ export function CoachPanel({
   statsEpoch,
   consent,
   paused = false,
+  active = true,
+  onOutcome,
 }: CoachPanelProps) {
-  const summaryOn = consent === undefined ? true : canSendSummary(consent);
-  const summaryOnRef = useRef(summaryOn);
-  summaryOnRef.current = summaryOn;
+  const summaryOn = consent !== undefined && canSendSummary(consent);
+  const pending = useRef<{ controller: AbortController; cancel: () => void } | null>(null);
   const [stats, setStats] = useState<AngleStats | null>(null);
   const [status, setStatus] = useState<CoachStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -97,30 +102,42 @@ export function CoachPanel({
 
   const cooling = cooldownActive(cooledUntil, Date.now());
 
-  // Withdrawing the summary choice stops tips at once, including any
-  // request already in flight: its response is ignored when it lands.
-  useEffect(() => {
-    if (!summaryOn) {
-      setStatus('idle');
-      setMessage(null);
-    }
-  }, [summaryOn]);
+  useRequestLifecycle(() => {
+    setStatus('idle');
+    setMessage(null);
+    return () => {
+      pending.current?.cancel();
+      pending.current = null;
+    };
+  }, [active, paused, summaryOn, statsEpoch, cantSeeYouActive]);
 
   const request = async (trigger: CoachCallTrigger) => {
-    if (paused || status === 'escalating' || !canRequestCoach(cantSeeYouActive, cooling)) return;
-    if (!summaryOnRef.current) {
+    if (!active || paused || pending.current || !frame?.gate.ok ||
+        !canRequestCoach(cantSeeYouActive, cooling)) return;
+    if (!summaryOn) {
+      onOutcome?.(trigger, 'local');
       setStatus('fallback');
       return;
     }
     const summary = buildCoachSummary(TASK_NAME, stats, systemState, topSignal);
     if (!summary) return;
+    const controller = new AbortController();
+    pending.current = {
+      controller,
+      cancel: () => {
+        controller.abort();
+        onOutcome?.(trigger, 'cancelled');
+      },
+    };
     setStatus('escalating');
     setMessage(null);
-    const result = await requestCoachMessage(summary, { timeoutMs: config.coach.timeout_ms });
-    if (!summaryOnRef.current) {
-      setStatus('idle');
-      return;
-    }
+    const result = await requestCoachMessage(summary, {
+      timeoutMs: config.coach.timeout_ms,
+      signal: controller.signal,
+    });
+    if (pending.current?.controller !== controller) return;
+    pending.current = null;
+    onOutcome?.(trigger, result.ok ? 'live' : 'fallback');
     // Every completed attempt enters the reviewer log on /metrics: a proxy
     // success is a live cloud-model tip, anything else is the local fallback.
     recordCoachCall({ trigger, state: systemState, topSignal, outcome: result.ok ? 'live' : 'fallback' });
@@ -155,19 +172,25 @@ export function CoachPanel({
     setMessage(null);
   };
 
-  const blocked = cantSeeYouActive || cooling || paused;
+  const blocked = !active || !frame?.gate.ok || cantSeeYouActive || cooling || paused;
 
   return (
-    <section aria-label="Coaching">
-      <h2>Coaching</h2>
+    <section className="panel coaching-panel" aria-label="Coaching">
+      <div className="section-heading">
+        <h2>Coaching</h2>
+        <span className="source-label">{summaryOn ? 'Muse Spark enabled' : 'Local feedback'}</span>
+      </div>
+      {status === 'idle' && <p className="muted">{active
+        ? 'Ask for a cue when your movement is in view.'
+        : 'Tips are available during an active session.'}</p>}
       {status === 'escalating' && <p aria-live="polite">{CHECKING_IN}</p>}
       {status === 'delivered' && message !== null && (
         <>
-          <p className="coach-message">{message}</p>
+          <p className="coach-message" role="status">{message}</p>
           <p>{LIVE_TIP_NOTE}</p>
         </>
       )}
-      {status === 'fallback' && <p>{LOCAL_FALLBACK}</p>}
+      {status === 'fallback' && <p role="status">Local tip: {LOCAL_FALLBACK}</p>}
       {(status === 'delivered' || status === 'fallback') && (
         <div className="button-row">
           <button type="button" onClick={dismiss}>
@@ -186,11 +209,12 @@ export function CoachPanel({
         </section>
       )}
       <div className="button-row">
-        <button type="button" onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
+        <button className="primary-button" type="button" onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
           {summaryOn ? COACH_BUTTON_LABEL : CONSENT_TIPS_OFF_NOTE}
         </button>
       </div>
-      <div>
+      <details className="coach-import">
+        <summary>Import a tip</summary>
         <label>
           {COACH_IMPORT_LABEL}{' '}
           <input
@@ -214,7 +238,7 @@ export function CoachPanel({
             }}
           />
         </label>
-      </div>
+      </details>
       {importProblem && <p role="alert">{importProblem}</p>}
       {imported && <ImportedTipView tip={imported} onDismiss={() => setImported(null)} />}
     </section>

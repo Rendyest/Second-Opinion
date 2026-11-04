@@ -87,23 +87,28 @@ export function SetupCheckList({
   return (
     <section aria-label="Setup checks">
       <h2>Setup checks</h2>
-      <ul>
+      <ul className="readiness-list">
         {results.map((r) => (
           <li key={r.id} id={`setup-check-${r.id}`}>
-            <span aria-hidden="true">{r.pass ? '✓' : '!'}</span> {r.label}:{' '}
-            {r.pass ? 'Pass' : 'Needs attention'}
+            <div className="readiness-row">
+              <strong>{r.label}</strong>
+              <span className={r.pass ? 'status-label status-pass' : 'status-label status-attention'}>
+                {r.pass ? 'Pass' : 'Needs attention'}
+              </span>
+            </div>
             {r.fix && <p>{r.fix}</p>}
           </li>
         ))}
       </ul>
       <div className="button-row">
         <button
+          className="primary-button"
           type="button"
           onClick={onStart}
           aria-disabled={startBlockedNow ? 'true' : undefined}
           aria-describedby={startBlockedNow ? blocked.map((id) => `setup-check-${id}`).join(' ') : undefined}
         >
-          Start session
+          Open session
         </button>
         {startBlockedNow && (
           <button type="button" onClick={onContinueAnyway}>
@@ -235,27 +240,33 @@ export function SetupChecks() {
   const continued = () => navigate('/session');
 
   return (
-    <div>
-      {live.status !== 'live' && (
-        <div className="button-row">
-          <button
-            type="button"
-            onClick={live.start}
-            disabled={live.status === 'loading'}
-          >
-            Turn on camera
-          </button>
+    <div className="setup-check-layout">
+      <div className="setup-preview">
+        {live.status !== 'live' && (
+          <div className="button-row">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={live.start}
+              disabled={live.status === 'loading'}
+            >
+              Turn on camera
+            </button>
+          </div>
+        )}
+        {live.status !== 'idle' && <p aria-live="polite">{statusText(live.status)}</p>}
+        {live.error && <p role="alert">{live.error}</p>}
+        <div className="setup-preview-window">
+          <video
+            ref={live.videoRef}
+            className="calibration-preview"
+            muted
+            playsInline
+            aria-label="Setup camera preview"
+          />
+          {live.status !== 'live' && <p>{live.status === 'loading' ? 'Starting preview…' : 'Camera preview is off'}</p>}
         </div>
-      )}
-      {live.status !== 'idle' && <p aria-live="polite">{statusText(live.status)}</p>}
-      {live.error && <p role="alert">{live.error}</p>}
-      <video
-        ref={live.videoRef}
-        className="calibration-preview"
-        muted
-        playsInline
-        aria-label="Setup camera preview"
-      />
+      </div>
       <SetupCheckList results={results} blocked={blocked} onStart={start} onContinueAnyway={continued} />
     </div>
   );

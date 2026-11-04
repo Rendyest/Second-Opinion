@@ -35,14 +35,13 @@ import {
   REVIEW_PICK_LABEL,
   REVIEW_RECORDED_NOTE,
   REVIEW_REVIEWER_LABEL,
+  REVIEW_SOURCE_LABELS,
   REVIEW_UNDO_LABEL,
 } from '../reviewCopy';
 
 /**
- * Reviewer route (dev only in the nav, reachable by URL). Loads a review
- * bundle or a single recorder clip through a file picker — everything stays
- * in memory. Results are never shown here: agreement comes only from real
- * submitted labels.
+ * Loads a review bundle or a single clip through a file picker. Clip data
+ * stays in memory. Agreement summarizes saved reviewer labels.
  */
 export function ReviewPage() {
   const [bundle, setBundle] = useState<ReviewBundle | null>(() => getLoadedBundle());
@@ -78,10 +77,7 @@ export function ReviewPage() {
             next = parseReviewBundle(json);
           } else {
             const recorded = parseRecordedClip(json);
-            // The review bundle only knows recorded/synthetic: an imported
-            // video is a recording, so it loads as one.
-            const bundleSource = recorded.source === 'imported_video' ? 'recorded' : recorded.source;
-            next = { version: 1 as const, source: bundleSource, clips: [reviewClipFromRecorded(recorded)] };
+            next = { version: 1 as const, source: recorded.source, clips: [reviewClipFromRecorded(recorded)] };
           }
           setLoadedBundle(next);
           setSelectedId(null);
@@ -197,112 +193,128 @@ export function ReviewPage() {
   const existing = selectedId ? (reviewById.get(selectedId) ?? null) : null;
 
   return (
-    <div>
-      <h1>Clip review (OT reviewer)</h1>
-      <div>
-        <label>
-          {REVIEW_REVIEWER_LABEL}{' '}
-          <input
-            type="text"
-            value={reviewer}
-            maxLength={80}
-            onChange={(e) => {
-              setReviewer(e.target.value);
-              saveReviewer(e.target.value);
-            }}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          {REVIEW_PICK_LABEL}{' '}
-          <input
-            type="file"
-            accept=".json,application/json"
-            onChange={(e) => {
-              onPickFile(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          {REVIEW_LABELS_PICK_LABEL}{' '}
-          <input
-            type="file"
-            accept=".json,application/json"
-            onChange={(e) => {
-              onImportLabels(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-        </label>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      {announcement && <p role="status">{announcement}</p>}
-      {selected ? (
-        <ReviewCard
-          key={selected.clip_id}
-          clip={selected}
-          existingReview={existing}
-          reviewer={reviewer}
-          blindDefault={config.review.blind_default}
-          noteMaxChars={config.review.note_max_chars}
-          onSubmit={submitReview}
-          onClose={() => setSelectedId(null)}
-          museImported={selected.clip_id in importedNeeds}
-          museNeedsReview={importedNeeds[selected.clip_id] ?? false}
-        />
-      ) : (
-        bundle && (
-          <ReviewQueue
-            rows={sorted}
-            filter={filter}
-            onFilterChange={setFilter}
-            counts={{
-              unreviewed: sorted.filter((r) => r.status === 'unreviewed').length,
-              confirmed: sorted.filter((r) => r.status === 'confirmed').length,
-              corrected: sorted.filter((r) => r.status === 'corrected').length,
-              flagged: sorted.filter((r) => r.status === 'flagged').length,
-              labeled: sorted.filter((r) => r.status === 'labeled').length,
-            }}
-            skippedCount={sorted.filter((r) => r.skipped).length}
-            source={bundle.source}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            dimBelowConf={config.gate.vis_min}
-          />
-        )
-      )}
-      {!bundle && (
-        <section aria-label="Review queue">
-          <h2>Review queue</h2>
-          <p>No review clips yet.</p>
-        </section>
-      )}
-      <section aria-label={REVIEW_AGREEMENT_TITLE}>
-        <h2>{REVIEW_AGREEMENT_TITLE}</h2>
-        {counts.counted === 0 ? (
-          <p>{REVIEW_NO_REVIEWS}</p>
-        ) : (
-          <>
-            <p>
-              {`${REVIEW_BLIND_HEADING}: ${formatPct(split.blind.exact)} exact (${split.blind.exactN} of ${split.blind.n} clips)`}
-            </p>
-            <p>
-              {`${REVIEW_ASSIST_HEADING} (${REVIEW_ASSISTED_TAG}): ${formatPct(split.assist.exact)} exact (${split.assist.exactN} of ${split.assist.n} clips)`}
-            </p>
-          </>
-        )}
-        <ul>
-          <li>{`Unusable: ${counts.unusable}`}</li>
-          <li>{`Skipped: ${counts.skipped}`}</li>
-          <li>{`Labeled (no Muse label): ${counts.labeled}`}</li>
-          <li>{`Unreviewed: ${counts.unreviewed}`}</li>
-          {withoutClip > 0 && <li>{`Reviews without a loaded clip: ${withoutClip}`}</li>}
-        </ul>
+    <div className="page reviewer-page review-page">
+      <header className="page-heading">
+        <h1>Clip review</h1>
+        <p>Load a clip or review bundle to inspect movement and record reviewer labels.</p>
+      </header>
+      <section className="panel review-intake" aria-label="Review inputs">
+        <h2>Load clips and labels</h2>
+        <div className="review-inputs">
+        <div>
+          <label>
+            {REVIEW_REVIEWER_LABEL}{' '}
+            <input
+              type="text"
+              value={reviewer}
+              maxLength={80}
+              onChange={(e) => {
+                setReviewer(e.target.value);
+                saveReviewer(e.target.value);
+              }}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            {REVIEW_PICK_LABEL}{' '}
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => {
+                onPickFile(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            {REVIEW_LABELS_PICK_LABEL}{' '}
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => {
+                onImportLabels(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+        </div>
+        {error && <p role="alert">{error}</p>}
+        {announcement && <p role="status">{announcement}</p>}
       </section>
+      <div className="review-workspace">
+        <div className="panel review-main">
+        {selected && bundle && <p>Source: {REVIEW_SOURCE_LABELS[bundle.source]}</p>}
+        {selected ? (
+          <ReviewCard
+            key={selected.clip_id}
+            clip={selected}
+            existingReview={existing}
+            reviewer={reviewer}
+            blindDefault={config.review.blind_default}
+            noteMaxChars={config.review.note_max_chars}
+            onSubmit={submitReview}
+            onClose={() => setSelectedId(null)}
+            museImported={selected.clip_id in importedNeeds}
+            museNeedsReview={importedNeeds[selected.clip_id] ?? false}
+          />
+        ) : (
+          bundle && (
+            <ReviewQueue
+              rows={sorted}
+              filter={filter}
+              onFilterChange={setFilter}
+              counts={{
+                unreviewed: sorted.filter((r) => r.status === 'unreviewed').length,
+                confirmed: sorted.filter((r) => r.status === 'confirmed').length,
+                corrected: sorted.filter((r) => r.status === 'corrected').length,
+                flagged: sorted.filter((r) => r.status === 'flagged').length,
+                labeled: sorted.filter((r) => r.status === 'labeled').length,
+              }}
+              skippedCount={sorted.filter((r) => r.skipped).length}
+              source={bundle.source}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              dimBelowConf={config.gate.vis_min}
+            />
+          )
+        )}
+        {!bundle && (
+          <section aria-label="Review queue">
+            <h2>Review queue</h2>
+            <div className="empty-state"><p>No review clips yet.</p><p>Choose a clip or review bundle above to open the queue.</p></div>
+          </section>
+        )}
+        </div>
+        <section className="panel review-agreement" aria-label={REVIEW_AGREEMENT_TITLE}>
+          <h2>{REVIEW_AGREEMENT_TITLE}</h2>
+          <p>Agreement covers all saved reviews and may include simulated clips.</p>
+          {counts.counted === 0 ? (
+            <p>{REVIEW_NO_REVIEWS}</p>
+          ) : (
+            <>
+              <p>
+                {`${REVIEW_BLIND_HEADING}: ${formatPct(split.blind.exact)} exact (${split.blind.exactN} of ${split.blind.n} clips)`}
+              </p>
+              <p>
+                {`${REVIEW_ASSIST_HEADING} (${REVIEW_ASSISTED_TAG}): ${formatPct(split.assist.exact)} exact (${split.assist.exactN} of ${split.assist.n} clips)`}
+              </p>
+            </>
+          )}
+          <ul>
+            <li>{`Unusable: ${counts.unusable}`}</li>
+            <li>{`Skipped: ${counts.skipped}`}</li>
+            <li>{`Labeled (no Muse label): ${counts.labeled}`}</li>
+            <li>{`Unreviewed: ${counts.unreviewed}`}</li>
+            {withoutClip > 0 && <li>{`Reviews without a loaded clip: ${withoutClip}`}</li>}
+          </ul>
+        </section>
+      </div>
+      <details className="disclosure">
+      <summary>Manage saved reviews</summary>
       <div className="button-row">
         {lastAction && (
           <button type="button" onClick={undoLast}>
@@ -327,6 +339,7 @@ export function ReviewPage() {
           {REVIEW_CLEAR_LABEL}
         </button>
       </div>
+      </details>
     </div>
   );
 }

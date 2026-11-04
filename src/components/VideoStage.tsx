@@ -7,6 +7,7 @@ import { GATE_REASON_TEXT } from '../pose/gate';
 interface VideoStageProps {
   /** Latest frame from either source; null before the first frame. */
   frame: PoseFrame | null;
+  clearOnMissingFrame?: boolean;
   /** Mirror the picture (default on: people expect a mirror view). */
   mirrored: boolean;
   showSkeleton: boolean;
@@ -15,6 +16,7 @@ interface VideoStageProps {
   /** Live camera element. Detached (no stream) in mock mode. */
   videoRef: RefObject<HTMLVideoElement>;
   cameraOn: boolean;
+  isReplay?: boolean;
   /** No stored calibration: the gate runs visibility-only and is less reliable. */
   uncalibrated?: boolean;
 }
@@ -82,11 +84,13 @@ export function drawList(
  */
 export function VideoStage({
   frame,
+  clearOnMissingFrame = false,
   mirrored,
   showSkeleton,
   dimBelowConf,
   videoRef,
   cameraOn,
+  isReplay = false,
   uncalibrated = false,
 }: VideoStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -96,8 +100,7 @@ export function VideoStage({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    if (!showSkeleton) {
-      // Toggling the skeleton off hides it: clear once and stop.
+    if (!showSkeleton || (!frame && clearOnMissingFrame)) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
@@ -108,7 +111,7 @@ export function VideoStage({
     if (!frame) return;
     const parent = canvas.parentElement;
     const w = parent?.clientWidth ?? 640;
-    const h = Math.round((w * 3) / 4);
+    const h = parent?.clientHeight || Math.round((w * 10) / 16);
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -129,7 +132,7 @@ export function VideoStage({
         ctx.setLineDash([6, 4]);
       }
       // Dark underlay then light core: readable on any camera picture.
-      // The working arm is thicker AND amber — never colour alone.
+      // The working arm is thicker as well as tinted.
       ctx.lineWidth = highlight ? 9 : 7;
       ctx.strokeStyle = '#111';
       ctx.beginPath();
@@ -137,7 +140,7 @@ export function VideoStage({
       ctx.lineTo(pb.x, pb.y);
       ctx.stroke();
       ctx.lineWidth = highlight ? 5 : 3;
-      ctx.strokeStyle = highlight ? '#ffd60a' : '#fff';
+      ctx.strokeStyle = highlight ? '#8ce9cb' : '#fff';
       ctx.beginPath();
       ctx.moveTo(pa.x, pa.y);
       ctx.lineTo(pb.x, pb.y);
@@ -160,21 +163,35 @@ export function VideoStage({
       ctx.restore();
     }
     ctx.restore();
-  }, [frame, mirrored, showSkeleton, dimBelowConf]);
+  }, [frame, mirrored, showSkeleton, dimBelowConf, clearOnMissingFrame]);
 
   return (
     <div className="stage-wrap">
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- live camera has no audio track */}
-      <video
-        ref={videoRef}
-        className="stage-video"
-        style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
-        muted
-        playsInline
-        aria-label="Camera picture"
-      />
-      {!cameraOn && <p className="stage-placeholder">Camera off — showing mock replay skeleton.</p>}
+      <div className="stage-viewport">
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption -- live camera has no audio track */}
+        <video
+          ref={videoRef}
+          className="stage-video"
+          style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
+          muted
+          playsInline
+          aria-label="Camera picture"
+        />
+        {!cameraOn && (
+          <div className={isReplay ? 'stage-replay-label' : 'stage-placeholder'}>
+            {!isReplay && (
+              <svg aria-hidden="true" viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="4" y="9" width="17" height="14" rx="3" />
+                <path d="m21 14 6-4v12l-6-4" strokeLinejoin="round" />
+              </svg>
+            )}
+            <strong>{isReplay ? 'Simulated movement' : 'Camera preview is off'}</strong>
+            {!isReplay && <span>Start a session when you’re ready.</span>}
+          </div>
+      )}
       <canvas ref={canvasRef} className="stage-canvas" aria-hidden="true" />
+      </div>
+      {(frame || uncalibrated) && <div className="stage-status">
       {frame && (
         <p role="status" className={frame.gate.ok ? 'gate-badge gate-ok' : 'gate-badge gate-bad'}>
           {frame.gate.ok
@@ -185,6 +202,7 @@ export function VideoStage({
       {uncalibrated && (
         <p className="gate-warning">No calibration yet — the signal check is less reliable.</p>
       )}
+      </div>}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import type { Server } from 'node:http';
 
 export interface CoachServerOptions {
   apiKey: string;
-  baseUrl: string;
   timeoutMs: number;
   cooldownMs: number;
   maxReplyChars: number;

@@ -96,6 +96,23 @@ export function canUseCamera(c: ConsentChoices): boolean {
   return c.camera;
 }
 
+const cameraChoiceListeners = new Set<(allowed: boolean) => void>();
+
+export function subscribeCameraWithdrawal(stop: () => void): () => void {
+  const onChoice = (allowed: boolean) => {
+    if (!allowed) stop();
+  };
+  cameraChoiceListeners.add(onChoice);
+  const onStorage = (event: StorageEvent) => {
+    if ((!event.key || event.key === STORAGE_KEY) && !canUseCamera(loadConsent())) stop();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    cameraChoiceListeners.delete(onChoice);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
 /** Clips may be recorded (in memory only). */
 export function canRecord(c: ConsentChoices): boolean {
   return c.recording;
@@ -120,11 +137,21 @@ export function useConsent() {
       if (!e.key || e.key === STORAGE_KEY) setConsent(loadConsent());
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const onCameraChoice = (camera: boolean) => {
+      setConsent((prev) => prev.camera === camera ? prev : { ...prev, camera });
+    };
+    cameraChoiceListeners.add(onCameraChoice);
+    return () => {
+      cameraChoiceListeners.delete(onCameraChoice);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const set = useCallback((key: ConsentKey, value: boolean) => {
     setConsent((prev) => setChoice(prev, key, value));
+    if (key === 'camera') {
+      for (const listener of cameraChoiceListeners) listener(value);
+    }
   }, []);
 
   const refresh = useCallback(() => {

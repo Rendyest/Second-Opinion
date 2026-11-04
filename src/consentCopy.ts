@@ -37,13 +37,13 @@ export const CONSENT_DEMO_NOTE = 'This notice is for this demo only.';
 
 export const CONSENT_CAMERA_NEED = 'Turn on the camera choice first, then try again.';
 export const CONSENT_RECORDING_NEED = 'Turn on the recording choice first, then try again.';
-export const CONSENT_TIPS_OFF_NOTE = 'Tips are off. Turn on the cloud summary choice to get tips.';
+export const CONSENT_TIPS_OFF_NOTE = 'Get a local tip (cloud coaching off)';
 
 export const DELETE_CLIPS_LABEL = 'Delete my clips';
 export const DELETE_CLIPS_CONFIRM =
-  'Delete recordings, saved measurements and any loaded review clips on this browser? ' +
+  'Delete recordings, session metrics, saved measurements and any loaded review clips on this browser? ' +
   'Your saved reviews stay. Files you already downloaded stay where they are.';
-export const DELETE_CLIPS_DONE = 'Your recordings and saved measurements were deleted from this browser.';
+export const DELETE_CLIPS_DONE = 'Your recordings, session metrics and saved measurements were deleted from this browser.';
 
 export const CALIBRATION_NEEDS_CAMERA =
   'Calibration needs your permission to use the camera. Tick “Use my camera” above, then try again.';

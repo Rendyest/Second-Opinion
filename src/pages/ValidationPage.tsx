@@ -59,6 +59,7 @@ function ShoulderTable({ rows, note }: { rows: ValidationShoulderRow[]; note: st
   return (
     <div>
       {note && <p>{note}</p>}
+      <div className="table-scroll" role="region" aria-label="Shoulder results table" tabIndex={0}>
       <table>
         <thead>
           <tr>
@@ -81,12 +82,14 @@ function ShoulderTable({ rows, note }: { rows: ValidationShoulderRow[]; note: st
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
 
 function ElbowRow({ row }: { row: ValidationElbowRow }) {
   return (
+    <div className="table-scroll" role="region" aria-label="Elbow results table" tabIndex={0}>
     <table>
       <thead>
         <tr>
@@ -109,11 +112,20 @@ function ElbowRow({ row }: { row: ValidationElbowRow }) {
         </tr>
       </tbody>
     </table>
+    </div>
   );
 }
 
 /** Pure presentational view so tests can render fixtures without a results file. */
 export function ValidationResultsView({ data }: { data: ValidationResults }) {
+  const provenance = data.provenance ?? 'unknown';
+  const sourceLabel = {
+    recorded: 'Recorded movement clips',
+    synthetic: 'Synthetic demonstration data — simulated measurements',
+    imported_video: 'Imported video — participant provenance unverified',
+    mixed: 'Mixed sources — may include synthetic or unverified data',
+    unknown: 'Unknown provenance — source could not be verified',
+  }[provenance];
   const views = ['front', 'side'].filter((v) => data.shoulder.some((r) => r.view === v));
   const tested = views
     .map((v) => {
@@ -127,13 +139,18 @@ export function ValidationResultsView({ data }: { data: ValidationResults }) {
     })
     .join('; ');
   return (
-    <div>
-      <h1>{VALIDATION_TITLE}</h1>
-      <section aria-label={VALIDATION_SET_HEADING}>
-        <h2>{VALIDATION_SET_HEADING}</h2>
+    <div className="page reviewer-page validation-page">
+      <header className="page-heading">
+        <h1>{VALIDATION_TITLE}</h1>
+        <p>Inspect movement-estimation results by view, target angle, and data source.</p>
+      </header>
+      <p className="provenance-note"><strong>Source:</strong> {sourceLabel}</p>
+      {provenance !== 'recorded' && <p>These results should not be used as real participant evidence.</p>}
+      <section aria-label={provenance === 'recorded' ? VALIDATION_SET_HEADING : 'Evaluation dataset'}>
+        <h2>{provenance === 'recorded' ? VALIDATION_SET_HEADING : 'Evaluation dataset'}</h2>
         <ul>
           <li>Clips: {data.recordedSet.n_clips}</li>
-          <li>Participants: {data.recordedSet.n_participants}</li>
+          {provenance === 'recorded' && <li>Participant identifiers: {data.recordedSet.n_participants}</li>}
           <li>In-hold frames: {data.recordedSet.n_frames_in_hold}</li>
           <li>Outside-hold frames: {data.recordedSet.n_frames_outside_hold}</li>
           <li>Unlabelled frames: {data.recordedSet.n_unlabelled_frames}</li>
@@ -171,7 +188,7 @@ export function ValidationResultsView({ data }: { data: ValidationResults }) {
         <p>
           {VALIDATION_REFERENCE_LABEL}: {data.reference}
         </p>
-        {data.reference_verified_by && (
+        {provenance === 'recorded' && data.reference_verified_by && (
           <p>
             {VALIDATION_VERIFIED_LABEL}: {data.reference_verified_by}
           </p>
@@ -185,7 +202,7 @@ export function ValidationResultsView({ data }: { data: ValidationResults }) {
           <li>{VALIDATION_NOTE_BIAS}</li>
           <li>{VALIDATION_NOTE_HOLD}</li>
         </ul>
-        <p>{VALIDATION_SMALL_SET}</p>
+        {provenance === 'recorded' && <p>{VALIDATION_SMALL_SET}</p>}
       </section>
     </div>
   );
@@ -195,9 +212,15 @@ export function ValidationPage() {
   const data = loadResults();
   if (!data) {
     return (
-      <div>
-        <h1>{VALIDATION_TITLE}</h1>
-        <p>{VALIDATION_NO_RESULTS}</p>
+      <div className="page reviewer-page validation-page">
+        <header className="page-heading">
+          <h1>{VALIDATION_TITLE}</h1>
+          <p>Inspect movement-estimation results by view, target angle, and data source.</p>
+        </header>
+        <section className="panel empty-state" aria-label="Evaluation results">
+          <h2>{VALIDATION_NO_RESULTS}</h2>
+          <p>Evaluation tables appear here when a results file is included in the app build.</p>
+        </section>
       </div>
     );
   }

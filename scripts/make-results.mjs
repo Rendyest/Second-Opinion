@@ -213,6 +213,7 @@ function main() {
   const shoulder = new Map(); // `${view}@${target}` -> { gated: [], all: [] }
   const elbow = { gated: [], all: [] };
   const names = new Set();
+  const sources = new Set();
   let nClips = 0;
   let nInHold = 0;
   let nOutsideHold = 0;
@@ -243,6 +244,7 @@ function main() {
       console.log(`skip ${file}: malformed baseline`);
       continue;
     }
+    sources.add(['recorded', 'imported_video', 'synthetic'].includes(clip.source) ? clip.source : 'unknown');
     const labelled =
       typeof clip.name === 'string' &&
       clip.name.length > 0 &&
@@ -313,14 +315,16 @@ function main() {
     })
     .sort((a, b) => (a.view < b.view ? -1 : a.view > b.view ? 1 : a.target_deg - b.target_deg));
 
+  const provenance = sources.size > 1 ? 'mixed' : (sources.values().next().value ?? 'unknown');
   const results = {
     schemaVersion: 1,
+    provenance,
     generatedAt: new Date().toISOString(),
     reference: 'Posed target angle (nominal)',
     thresholds_tuned_on_reported_clips: false,
     recordedSet: {
       n_clips: nClips,
-      n_participants: names.size,
+      n_participants: provenance === 'recorded' ? names.size : 0,
       n_frames_in_hold: nInHold,
       n_frames_outside_hold: nOutsideHold,
       n_unlabelled_frames: nUnlabelled,
@@ -342,7 +346,7 @@ function main() {
   mkdirSync('results', { recursive: true });
   writeFileSync(join('results', 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 
-  console.log(`clips: ${nClips}, participants: ${names.size}, in-hold: ${nInHold}`);
+  console.log(`source: ${provenance}, clips: ${nClips}, in-hold: ${nInHold}`);
   for (const row of shoulderRows) {
     console.log(
       `${row.view} @ ${row.target_deg}: n_all=${row.n_all} mae_all=${row.mae_deg_all} n_gated=${row.n_gated_ok} mae_gated=${row.mae_deg_gated_ok}`,

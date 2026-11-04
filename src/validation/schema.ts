@@ -10,6 +10,7 @@ export const VALIDATION_SCHEMA_VERSION = 1;
 export const VALIDATION_REFERENCE = 'Posed target angle (nominal)';
 
 export type ValidationView = 'front' | 'side';
+const PROVENANCE = ['recorded', 'synthetic', 'imported_video', 'mixed', 'unknown'] as const;
 
 export interface ValidationRecordedSet {
   n_clips: number;
@@ -44,6 +45,8 @@ export interface ValidationElbowRow {
 
 export interface ValidationResults {
   schemaVersion: 1;
+  /** Legacy files without this field have unknown provenance. */
+  provenance?: (typeof PROVENANCE)[number];
   generatedAt: string;
   reference: typeof VALIDATION_REFERENCE;
   reference_verified_by?: string;
@@ -59,6 +62,7 @@ export interface ValidationResults {
 
 const TOP_LEVEL_KEYS: readonly string[] = [
   'schemaVersion',
+  'provenance',
   'generatedAt',
   'reference',
   'reference_verified_by',
@@ -93,7 +97,6 @@ function isRecordedSet(v: unknown): v is ValidationRecordedSet {
   return (
     isNonNegativeInt(v['n_clips']) &&
     isNonNegativeInt(v['n_participants']) &&
-    (v['n_participants'] as number) >= 1 &&
     isNonNegativeInt(v['n_frames_in_hold']) &&
     isNonNegativeInt(v['n_frames_outside_hold']) &&
     isNonNegativeInt(v['n_unlabelled_frames'])
@@ -132,11 +135,13 @@ export function isValidationResults(v: unknown): v is ValidationResults {
     if (!TOP_LEVEL_KEYS.includes(key)) return false;
   }
   if (v['schemaVersion'] !== VALIDATION_SCHEMA_VERSION) return false;
+  if (v['provenance'] !== undefined && !PROVENANCE.some((source) => source === v['provenance'])) return false;
   if (typeof v['generatedAt'] !== 'string' || (v['generatedAt'] as string).length === 0) return false;
   if (v['reference'] !== VALIDATION_REFERENCE) return false;
   if (v['reference_verified_by'] !== undefined && typeof v['reference_verified_by'] !== 'string') return false;
   if (typeof v['thresholds_tuned_on_reported_clips'] !== 'boolean') return false;
   if (!isRecordedSet(v['recordedSet'])) return false;
+  if (v['provenance'] !== undefined && v['provenance'] !== 'recorded' && v['recordedSet'].n_participants !== 0) return false;
   if (!Array.isArray(v['shoulder']) || (v['shoulder'] as unknown[]).length === 0) return false;
   const seen = new Set<string>();
   for (const row of v['shoulder'] as unknown[]) {

@@ -112,6 +112,7 @@ describe('coach panel live marker', () => {
         cantSeeYouActive={false}
         escalationId={0}
         statsEpoch="test"
+        consent={{ camera: true, recording: false, cloud_summary: true, cloud_clips: false }}
       />,
     );
     expect(html).toContain('Get a tip');

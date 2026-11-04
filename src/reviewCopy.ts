@@ -41,6 +41,11 @@ export function museLabelText(muse: MuseLabel | null): string {
 }
 
 export const REVIEW_SOURCE_SYNTHETIC = 'Synthetic fixture';
+export const REVIEW_SOURCE_LABELS = {
+  recorded: REVIEW_SOURCE_RECORDED,
+  imported_video: 'Imported video',
+  synthetic: `${REVIEW_SOURCE_SYNTHETIC} (simulated data)`,
+};
 
 export const REVIEW_PICK_LABEL = 'Choose a review bundle or recorder clip file';
 

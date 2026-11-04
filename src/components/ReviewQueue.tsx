@@ -1,4 +1,4 @@
-import type { ReviewClip } from '../contracts';
+import type { ClipSource, ReviewClip } from '../contracts';
 import type { ReviewStatus, StoredReview } from '../review/labels';
 import { museLabelText } from '../reviewCopy';
 import { SkeletonSvg } from '../review/skeletonSvg';
@@ -6,8 +6,7 @@ import {
   REVIEW_FILTER_ALL,
   REVIEW_FILTER_LABEL,
   REVIEW_QUEUE_EMPTY,
-  REVIEW_SOURCE_RECORDED,
-  REVIEW_SOURCE_SYNTHETIC,
+  REVIEW_SOURCE_LABELS,
   REVIEW_STATUS_LABEL,
 } from '../reviewCopy';
 
@@ -72,7 +71,7 @@ export function ReviewQueue({
   onFilterChange: (f: ReviewStatus | 'all') => void;
   counts: Record<ReviewStatus, number>;
   skippedCount: number;
-  source: 'recorded' | 'synthetic';
+  source: ClipSource;
   selectedId: string | null;
   onSelect: (clipId: string) => void;
   dimBelowConf: number;
@@ -90,7 +89,7 @@ export function ReviewQueue({
     <section aria-label="Review queue">
       <h2>Review queue</h2>
       <p>
-        Source: {source === 'recorded' ? REVIEW_SOURCE_RECORDED : REVIEW_SOURCE_SYNTHETIC}
+        Source: {REVIEW_SOURCE_LABELS[source]}
       </p>
       <div>
         <label>

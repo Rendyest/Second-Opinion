@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { clearCalibration, useCalibration } from '../pose/calibration';
 import { clearAllBuffers } from '../recording/clipBuffer';
 import { clearLoadedBundle } from '../review/store';
+import { publishCompletedSession } from '../metrics/sessionSummary';
+import { clearCoachCalls } from '../coach/coachCalls';
 import {
   DELETE_CLIPS_CONFIRM,
   DELETE_CLIPS_DONE,
@@ -14,7 +16,7 @@ import {
  * choices and saved reviews stay. Confirms first with a native dialog; the
  * result line has no digits.
  */
-export function DeleteMyClips() {
+export function DeleteMyClips({ onDelete }: { onDelete?: () => void }) {
   const { refresh } = useCalibration();
   const [done, setDeleted] = useState(false);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -22,8 +24,11 @@ export function DeleteMyClips() {
   const confirmDelete = () => {
     clearAllBuffers();
     clearLoadedBundle();
+    publishCompletedSession(null);
+    clearCoachCalls();
     clearCalibration();
     refresh();
+    onDelete?.();
     setDeleted(true);
     dialogRef.current?.close();
   };

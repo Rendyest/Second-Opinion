@@ -4,7 +4,7 @@
  * this server validates it, forwards it to the configured Muse Spark
  * endpoint, and returns the coaching message.
  *
- * - Key and base URL come from environment variables only (see .env.example).
+ * - The key comes from the server environment (see .env.example).
  * - Timeout and cooldown come from src/config/config.default.json.
  * - Cooldown starts after every proxied call, success or failure.
  * - Failures and fallbacks are logged to the console only, never with
@@ -14,10 +14,12 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnvFile } from 'node:process';
 import { validateCoachSummary } from './validate.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BODY_LIMIT = 100 * 1024;
+const MUSE_RESPONSES_URL = 'https://api.meta.ai/v1/responses';
 
 function loadCoachConfig() {
   const raw = readFileSync(path.join(ROOT, 'src', 'config', 'config.default.json'), 'utf-8');
@@ -52,17 +54,25 @@ function json(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-/** Accept the common message shapes without ever logging the payload. */
-function extractMessage(upstream) {
-  if (typeof upstream !== 'object' || upstream === null) return null;
-  if (typeof upstream.message === 'string' && upstream.message.length > 0) return upstream.message;
-  if (typeof upstream.text === 'string' && upstream.text.length > 0) return upstream.text;
-  const choices = upstream.choices;
-  if (Array.isArray(choices) && choices.length > 0) {
-    const content = choices[0]?.message?.content ?? choices[0]?.text;
-    if (typeof content === 'string' && content.length > 0) return content;
-  }
-  return null;
+/** Read the same Responses output text that the Python SDK aggregates. */
+function extractCue(upstream) {
+  if (upstream?.status !== 'completed' || !Array.isArray(upstream.output)) return null;
+  const text = upstream.output
+    .filter((item) => item?.type === 'message' && Array.isArray(item.content))
+    .flatMap((item) => item.content)
+    .filter((part) => part?.type === 'output_text' && typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('');
+  const tip = JSON.parse(text);
+  if (!tip ||
+      typeof tip.struggling !== 'boolean' ||
+      typeof tip.signal !== 'string' ||
+      typeof tip.body_part !== 'string' ||
+      !['none', 'mild', 'moderate', 'high'].includes(tip.severity) ||
+      typeof tip.ask_pain_check !== 'boolean' ||
+      typeof tip.safety_concern !== 'boolean' ||
+      typeof tip.cue_text !== 'string') return null;
+  return tip.cue_text.trim() || null;
 }
 
 /**
@@ -70,10 +80,14 @@ function extractMessage(upstream) {
  * the client never sends anything but the summary, and the server never
  * sends anything but this instruction plus that summary.
  */
-export const PROMPT_INSTRUCTION =
+const PROMPT_INSTRUCTION =
   'You are a kind movement coach. Reply with 1-2 encouraging sentences. ' +
   'Suggest ONE small adjustment. Do not diagnose any condition. ' +
-  'Do not tell the person to push through pain. Do not use failure language.';
+  'Do not tell the person to push through pain, assume pain, or increase movement intensity. ' +
+  'Do not use failure language. Base the cue only on the observations. ' +
+  'Return JSON only with these fields: struggling (boolean), signal (string), body_part (string), ' +
+  'severity (none, mild, moderate, or high), cue_text (string, at most 200 characters), ' +
+  'ask_pain_check (boolean), and safety_concern (boolean).';
 
 /**
  * System 1 labels never reach the model verbatim: they are neutral phrases
@@ -111,11 +125,15 @@ function replyProblem(message, maxChars) {
   return null;
 }
 
-export function createCoachServer({ apiKey, baseUrl, timeoutMs, cooldownMs, maxReplyChars, fetchImpl = fetch }) {
+export function createCoachServer({ apiKey, timeoutMs, cooldownMs, maxReplyChars, fetchImpl = fetch }) {
   let lastCallAt = 0;
   const server = http.createServer(async (req, res) => {
     if (req.method !== 'POST' || req.url !== '/api/coach') {
       json(res, 404, { error: 'not found' });
+      return;
+    }
+    if (req.headers['content-type']?.split(';')[0].trim() !== 'application/json') {
+      json(res, 415, { error: 'expected application/json' });
       return;
     }
     let raw;
@@ -147,17 +165,29 @@ export function createCoachServer({ apiKey, baseUrl, timeoutMs, cooldownMs, maxR
     lastCallAt = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const abortOnDisconnect = () => controller.abort();
+    res.once('close', abortOnDisconnect);
     try {
-      const upstream = await fetchImpl(baseUrl, {
+      const upstream = await fetchImpl(MUSE_RESPONSES_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ instruction: PROMPT_INSTRUCTION, summary: neutralizeSummary(body) }),
+        body: JSON.stringify({
+          model: 'muse-spark-1.3',
+          input: `${PROMPT_INSTRUCTION}\n\nMovement observations:\n${JSON.stringify(neutralizeSummary(body))}`,
+          reasoning: { effort: 'low' },
+          max_output_tokens: 1200,
+        }),
         signal: controller.signal,
+        redirect: 'error',
       });
-      if (!upstream.ok) throw new Error(`upstream status ${upstream.status}`);
-      const message = extractMessage(await upstream.json());
+      if (upstream.status === 429) {
+        json(res, 429, { error: 'coach rate limited' });
+        return;
+      }
+      if (!upstream.ok) throw new Error('upstream failed');
+      const message = extractCue(await upstream.json());
       if (!message) throw new Error('upstream answered without a message');
-      const problem = replyProblem(message, maxReplyChars);
+      const problem = replyProblem(message, Math.min(200, maxReplyChars));
       if (problem) {
         // Guarded reply: a 502-style error the client turns into the local
         // fallback. Only the reason name is logged, never the reply.
@@ -166,12 +196,14 @@ export function createCoachServer({ apiKey, baseUrl, timeoutMs, cooldownMs, maxR
         return;
       }
       json(res, 200, { message });
-    } catch (e) {
-      console.error({ event: 'coach_failure', reason: e instanceof Error ? e.name : 'unknown' });
-      const timedOut = e instanceof Error && e.name === 'AbortError';
+    } catch {
+      if (res.destroyed) return;
+      const timedOut = controller.signal.aborted;
+      console.error({ event: 'coach_failure', reason: timedOut ? 'timeout' : 'upstream failure' });
       json(res, timedOut ? 504 : 502, { error: timedOut ? 'coach timed out' : 'coach failed' });
     } finally {
       clearTimeout(timer);
+      res.off('close', abortOnDisconnect);
     }
   });
   return server;
@@ -180,18 +212,26 @@ export function createCoachServer({ apiKey, baseUrl, timeoutMs, cooldownMs, maxR
 const invokedAsScript = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedAsScript) {
-  if (!process.env.MUSE_SPARK_API_KEY || !process.env.MUSE_SPARK_BASE_URL) {
-    console.error({ event: 'coach_config', reason: 'missing env' });
+  try {
+    loadEnvFile(path.join(ROOT, '.env'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('Could not load the server .env file.');
+      process.exit(1);
+    }
+  }
+  const apiKey = process.env.MODEL_API_KEY?.trim();
+  if (!apiKey) {
+    console.error('Set MODEL_API_KEY in the repository .env or the server environment.');
     process.exit(1);
   }
   const { timeoutMs, cooldownMs, maxReplyChars } = loadCoachConfig();
   const server = createCoachServer({
-    apiKey: process.env.MUSE_SPARK_API_KEY,
-    baseUrl: process.env.MUSE_SPARK_BASE_URL,
+    apiKey,
     timeoutMs,
     cooldownMs,
     maxReplyChars,
   });
   const port = Number(process.env.COACH_PORT ?? 8787);
-  server.listen(port);
+  server.listen(port, '127.0.0.1', () => console.log(`Coach proxy listening on 127.0.0.1:${port}`));
 }

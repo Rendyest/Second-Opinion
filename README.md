@@ -1,5 +1,8 @@
 # Mirra Call — coaching loop (MVP), slice 1: app shell + mock data mode
 
+The slice 1 notes below describe the original mock-only shell. For the
+current webcam coaching demo, follow [Live Muse Spark coaching](#live-muse-spark-coaching).
+
 ## Files created
 - `package.json`, `vite.config.ts`, `vitest.config.ts`, `tsconfig.json`, `index.html`, `.gitignore`
 - `public/config.json` — all thresholds (gate, hysteresis, coach cooldown, fixed-interval baseline)
@@ -56,27 +59,39 @@ Then, in the app:
 Check the plumbing with `npm test -- tests/demoData.test.ts`, which
 generates into a temp folder, validates every output, and scores it.
 
-Synthetic demo data only — never use its figures for reported results.
+The generated Validation page identifies this source as synthetic and omits
+participant counts. Do not use its figures as recorded evidence. Regenerate
+older result files from the original clips to establish provenance.
 
-## Live Muse tips (real cloud-model calls)
+## Live Muse Spark coaching
 
-Delivered tips carry a "Live tip from the cloud model." note; when the
-proxy is unreachable the panel shows the local fallback instead, and every
-completed attempt is listed under "Cloud-model tips (dev)" on `/metrics`
-with its outcome (live or fallback), so judges can see each real call.
+Use Node.js 22 or later. From the repository root in Windows PowerShell,
+copy the example if you do not already have a `.env`:
 
-To enable live calls (two shells, from the repo root):
-
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
-# Shell 1 — put real values in .env (see .env.example, never commit it),
-# then start the coach proxy (default port 8787):
-npm run coach-proxy
 
-# Shell 2 — start the app (the dev server forwards /api/coach to the proxy):
+Set `MODEL_API_KEY` in `.env` using the same Meta key as the Python scripts.
+The Node proxy loads that file automatically. Start the proxy and frontend
+in separate PowerShell windows from the repository root:
+
+```powershell
+# Window 1
+npm run coach-proxy
+# Window 2
 npm run dev
 ```
 
-Then tick "Allow short summaries of my movement to be sent to the cloud
-model" in consent, and either press "Get a tip" or let a struggle flag
-fire. Without the proxy running, tips fall back locally and the log shows
-"Local fallback tip" — no key or provider URL ever lives in client code.
+Open the localhost URL Vite prints. In an active webcam session, opt in to
+cloud summaries and press **Get a tip**, or let System 1 detect a struggle.
+When cloud coaching is disabled or a request fails, the app labels the
+available fallback as a **Local tip**. Metrics shows the outcome of completed
+cloud attempts. The proxy forwards only an aggregate movement summary to
+the Meta Responses API and keeps the key server-side.
+
+For a local rehearsal from a production build, run `npm run build` followed
+by `npm run preview` with the proxy still running. Both Vite commands forward
+`/api/coach` to the loopback proxy on port 8787 by default. To use another
+port, set `COACH_PORT` in the root `.env` and restart both commands. A static host needs its own
+same-origin forwarding for that route.

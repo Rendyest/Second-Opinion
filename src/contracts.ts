@@ -164,6 +164,10 @@ export interface ClipLabel {
 
 export type ClipSource = 'recorded' | 'synthetic' | 'imported_video';
 
+function isClipSource(value: unknown): value is ClipSource {
+  return value === 'recorded' || value === 'synthetic' || value === 'imported_video';
+}
+
 /** Camera view at import time, stored with the clip. */
 export type ClipView = 'front' | 'side';
 
@@ -304,7 +308,7 @@ export function isRecordedClip(v: unknown): v is RecordedClip {
     if (!CLIP_KEYS.includes(key)) return false;
   }
   if (v['version'] !== 1) return false;
-  if (v['source'] !== 'recorded' && v['source'] !== 'synthetic' && v['source'] !== 'imported_video') return false;
+  if (!isClipSource(v['source'])) return false;
   if (typeof v['name'] !== 'string' || (v['name'] as string).length === 0) return false;
   if (!isFiniteNum(v['fps']) || (v['fps'] as number) <= 0) return false;
   if (!Array.isArray(v['frames']) || !(v['frames'] as unknown[]).every(isClipFrame)) return false;
@@ -372,7 +376,7 @@ export interface ReviewClip {
 /** In-memory review bundle: clips only, never results. */
 export interface ReviewBundle {
   version: 1;
-  source: 'recorded' | 'synthetic';
+  source: ClipSource;
   clips: ReviewClip[];
 }
 
@@ -433,7 +437,7 @@ export function isReviewBundle(v: unknown): v is ReviewBundle {
     if (key !== 'version' && key !== 'source' && key !== 'clips') return false;
   }
   if (v['version'] !== 1) return false;
-  if (v['source'] !== 'recorded' && v['source'] !== 'synthetic') return false;
+  if (!isClipSource(v['source'])) return false;
   if (!Array.isArray(v['clips'])) return false;
   const seen = new Set<string>();
   for (const clip of v['clips'] as unknown[]) {
@@ -446,7 +450,7 @@ export function isReviewBundle(v: unknown): v is ReviewBundle {
 
 /** Parse a picked review-bundle file; throws a plain-worded message on failure. */
 export function parseReviewBundle(v: unknown): ReviewBundle {
-  if (!isRecord(v) || v['version'] !== 1 || (v['source'] !== 'recorded' && v['source'] !== 'synthetic')) {
+  if (!isRecord(v) || v['version'] !== 1 || !isClipSource(v['source'])) {
     throw new Error('That file is not a valid review bundle. It must hold version 1, a source and a clips array.');
   }
   for (const key of Object.keys(v)) {
@@ -473,7 +477,7 @@ export function parseReviewBundle(v: unknown): ReviewBundle {
   });
   const bundle: ReviewBundle = {
     version: 1,
-    source: v['source'] === 'synthetic' ? 'synthetic' : 'recorded',
+    source: v['source'],
     clips,
   };
   if (containsImageData(bundle)) {
