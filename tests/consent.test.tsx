@@ -20,6 +20,7 @@ import {
   CONSENT_TEXT_VERSION,
   loadConsent,
   setChoice,
+  storageWorks,
   type ConsentState,
 } from '../src/consent/consent';
 import {
@@ -457,5 +458,53 @@ describe('clip buffer', () => {
     } finally {
       unregister();
     }
+  });
+});
+
+describe('consent storage health', () => {
+  function formMarkup(): string {
+    return renderToStaticMarkup(<ConsentForm consent={state()} onChange={() => {}} />);
+  }
+
+  it('passes the probe when storage keeps what it is given', () => {
+    stubStorage();
+    expect(storageWorks()).toBe(true);
+  });
+
+  it('fails the probe when writes throw instead of sticking', () => {
+    stubStorage();
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('blocked');
+      },
+      removeItem: () => {},
+      clear: () => {},
+    });
+    expect(storageWorks()).toBe(false);
+  });
+
+  it('stays silent when storage works', () => {
+    stubStorage();
+    const html = formMarkup();
+    expect(html).not.toContain('tick them each visit');
+    expect(html).not.toMatch(BANNED);
+  });
+
+  it('explains itself when the browser discards stored choices', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('blocked');
+      },
+      removeItem: () => {},
+      clear: () => {},
+    });
+    const html = formMarkup();
+    expect(html).toContain('tick them each visit');
+    expect(html).not.toMatch(BANNED);
+    // Strip tags first: tag names like h2 are not participant-visible text.
+    const text = html.replace(/<[^>]+>/g, ' ');
+    expect(text).not.toMatch(/\d/);
   });
 });

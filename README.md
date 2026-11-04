@@ -89,4 +89,7 @@ fire. Automatic tips are on by default, so a struggle flag fetches a tip
 without pressing anything; the toggle in the Coaching section turns that
 off, leaving only the hand-pressed button. Without the proxy running, tips
 fall back locally and the log shows "Local fallback tip" — no key or
-provider URL ever lives in client code.
+provider URL ever lives in client code. If the consent form says choices
+reset when you leave, your browser is discarding stored choices (try a
+normal, non-private window) — until that is fixed, tick the summary box
+each visit, since unticked means no calls at all.

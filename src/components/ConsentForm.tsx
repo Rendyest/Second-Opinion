@@ -32,11 +32,19 @@ const ROWS: Array<{ key: ConsentKey; label: string; text: string }> = [
  * (withdrawing mid-session). Box 4 needs box 2; unticking box 2 unticks
  * box 4 in the consent module itself.
  */
+/**
+ * Shown when the browser discards stored choices, so a box that flips back
+ * is explained instead of silent. No banned words, no digits.
+ */
+const STORAGE_NOTE = 'Choices cannot be kept on this browser, so tick them each visit.';
+
 export function ConsentForm({ consent, onChange }: Props) {
   const recordingOn = canRecord(consent);
+  const [storageOk] = useState(storageWorks);
   return (
     <section aria-label={CONSENT_TITLE}>
       <h2>{CONSENT_TITLE}</h2>
+      {!storageOk && <p role="status">{STORAGE_NOTE}</p>}
       {ROWS.map(({ key, label, text }) => {
         const needsRecording = key === 'cloud_clips' && !recordingOn;
         return (
