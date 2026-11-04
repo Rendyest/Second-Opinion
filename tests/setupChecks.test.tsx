@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { SetupChecks } from '../src/components/SetupChecks';
+import { MockStreamProvider } from '../src/mock/MockStreamContext';
+import { SetupPage } from '../src/pages/SetupPage';
 import {
   createCheckDebouncer,
   evaluateSetupChecks,
@@ -262,6 +264,30 @@ describe('setup geometry helpers', () => {
     expect(fpsOverWindow([9000], 10000, 2)).toBeNull();
     expect(fpsOverWindow([9000, 9500, 10000], 10000, 2)).toBeCloseTo(1.5, 10);
     expect(fpsOverWindow([1000, 9500, 10000], 10000, 2)).toBeCloseTo(1, 10);
+  });
+});
+
+describe('setup checks camera element', () => {
+  it('renders a camera preview video so live pose can start', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SetupChecks />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('<video');
+  });
+
+  it('pins the whole setup checks block in a page-level side menu', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <MockStreamProvider>
+          <SetupPage />
+        </MockStreamProvider>
+      </MemoryRouter>,
+    );
+    expect(html).toContain('setup-layout');
+    expect(html).toContain('setup-side');
+    expect(html).toContain('setup-check-camera');
   });
 });
 

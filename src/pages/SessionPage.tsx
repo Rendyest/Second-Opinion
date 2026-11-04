@@ -313,6 +313,11 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
               dimBelowConf={config.gate.vis_min}
               videoRef={live.videoRef}
               cameraOn={cameraOn}
+              cameraHint={
+                source === 'live'
+                  ? 'Camera off — press Start camera above to turn on your camera.'
+                  : undefined
+              }
               isReplay={source === 'mock'}
               uncalibrated={calibration.baseline === null}
             />
@@ -341,7 +346,6 @@ export function SessionPage({ initialSource }: { initialSource?: PictureSource }
               {stageToggles}
             </div>
           )}
-          {source === 'mock' && devControls && <MockTransport />}
         </section>
 
         <div className="session-rail">

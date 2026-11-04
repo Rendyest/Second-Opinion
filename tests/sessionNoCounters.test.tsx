@@ -458,8 +458,8 @@ describe('session live branch (no camera)', () => {
     expect(html).toContain('Mirror:');
   });
 
-  it('names the default stage hint in the live branch only', () => {
-    expect(liveMarkup()).toContain('Camera preview is off');
-    expect(sessionMarkup()).not.toContain('Camera preview is off');
+  it('names the start button on the black stage in the live branch only', () => {
+    expect(liveMarkup()).toContain('press Start camera above to turn on your camera');
+    expect(sessionMarkup()).not.toContain('press Start camera above');
   });
 });

@@ -17,6 +17,8 @@ interface VideoStageProps {
   videoRef: RefObject<HTMLVideoElement>;
   cameraOn: boolean;
   isReplay?: boolean;
+  /** Live-branch hint shown over the dark stage instead of the default text. */
+  cameraHint?: string;
   /** No stored calibration: the gate runs visibility-only and is less reliable. */
   uncalibrated?: boolean;
 }
@@ -91,6 +93,7 @@ export function VideoStage({
   videoRef,
   cameraOn,
   isReplay = false,
+  cameraHint,
   uncalibrated = false,
 }: VideoStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -185,8 +188,8 @@ export function VideoStage({
                 <path d="m21 14 6-4v12l-6-4" strokeLinejoin="round" />
               </svg>
             )}
-            <strong>{isReplay ? 'Simulated movement' : 'Camera preview is off'}</strong>
-            {!isReplay && <span>Start a session when you’re ready.</span>}
+            <strong>{isReplay ? 'Simulated movement' : (cameraHint ?? 'Camera preview is off')}</strong>
+            {!isReplay && !cameraHint && <span>Start a session when you’re ready.</span>}
           </div>
       )}
       <canvas ref={canvasRef} className="stage-canvas" aria-hidden="true" />

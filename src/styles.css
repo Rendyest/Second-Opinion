@@ -232,6 +232,9 @@ dialog::backdrop { background: rgb(15 39 32 / .55); }
 .setup-steps a { display: inline-flex; align-items: center; min-height: 44px; }
 .setup-grid { display: grid; grid-template-columns: minmax(16rem, .85fr) minmax(0, 2fr); gap: var(--space); align-items: start; }
 .setup-check-layout { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 1.1rem; margin-top: 1.05rem; }
+.setup-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(19rem, .95fr); gap: var(--space); align-items: start; margin-top: 1.05rem; }
+.setup-main { grid-column: 1; grid-row: 1; min-width: 0; }
+.setup-side { grid-column: 2; grid-row: 1; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; align-content: start; }
 .setup-preview .button-row { margin-top: 0; }
 .setup-preview [aria-live] { color: var(--muted); }
 .setup-preview-window { position: relative; }
@@ -251,6 +254,10 @@ dialog::backdrop { background: rgb(15 39 32 / .55); }
 .calibration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space); }
 .calibration-grid > section { padding: 1.2rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .calibration-preview { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; margin: .8rem 0 0; border-radius: 10px; background: var(--stage); }
+.setup-side .calibration-preview { max-width: 20rem; margin-top: .5rem; }
+.setup-side .button-row { margin-block: .5rem; }
+.setup-side .readiness-list li { padding: .35rem 0; }
+.setup-side .readiness-list p { margin-top: .15rem; }
 .consent-choice { padding-block: .55rem .8rem; border-bottom: 1px solid var(--line); }
 .consent-choice label, section[aria-label="Record a clip (dev)"] label {
   display: flex;
@@ -357,8 +364,10 @@ tbody tr:nth-child(even) { background: #f6f9f7; }
 }
 @media (max-width: 52rem) {
   .header-inner { flex-wrap: wrap; }
-  .setup-grid, .session-layout, .review-workspace { grid-template-columns: minmax(0, 1fr); }
+  .setup-grid, .session-layout, .setup-layout, .review-workspace { grid-template-columns: minmax(0, 1fr); }
   .setup-check-layout, .review-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .setup-main, .setup-side { grid-column: auto; grid-row: auto; }
+  .setup-side { position: static; max-height: none; overflow: visible; }
   .stage-video { max-height: 68vh; object-fit: fill; }
 }
 @media (max-width: 37rem) {

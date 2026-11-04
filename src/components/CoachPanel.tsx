@@ -272,7 +272,7 @@ export function CoachPanel({
           <button className='primary-button' type='button' onClick={() => void request('button')} disabled={blocked || status === 'escalating'}>
             {COACH_BUTTON_LABEL}
           </button>
-        ) : onEnableSpark ? (
+        ) : onEnableSpark && !cantSeeYouActive ? (
           <button type="button" onClick={onEnableSpark}>
             {SPARK_ENABLE_LABEL}
           </button>
