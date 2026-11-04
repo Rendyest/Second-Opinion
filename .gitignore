@@ -41,6 +41,8 @@ results/
 
 # Model weights
 weights/
+*.pkl
+*.task
 *.pt
 *.pth
 *.ckpt

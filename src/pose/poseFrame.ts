@@ -2,13 +2,13 @@ import type { PoseFrame } from '../contracts';
 import { elbowFlexion, shoulderElevation } from './angles';
 import type { Joint } from './angles';
 
-// MediaPipe Pose landmark indices (person's right arm: 12/14/16; face:
-// 0-10; right index fingertip: 20). Verified against the pose_landmarker
-// guide for the pinned tasks-vision 0.10.14 model family: 0 nose, 1/2/3 left
+// Blaze index slots (person's right arm: 12/14/16; face: 0-10;
+// 0-10; right index fingertip: 20). Detectors (sidecar COCO-17 via
+// coco17ToBlaze below) remap into these slots: 0 nose, 1/2/3 left
 // eye inner/center/outer, 4/5/6 right eye inner/center/outer, 7 left ear,
 // 8 right ear, 9 mouth left, 10 mouth right, 11/12 shoulders, 14 right elbow,
 // 16 right wrist, 19 left index, 20 right index. The 33-landmark topology is
-// fixed for pose_landmarker_lite, so these hold for the pinned version.
+// fixed here, so all detectors share one contract.
 export const NOSE = 0;
 export const L_EYE_IN = 1;
 export const L_EYE = 2;
@@ -34,6 +34,54 @@ export interface Point2D {
   x: number;
   y: number;
   visibility?: number;
+}
+
+// COCO-17 order used by Detectron2 Keypoint R-CNN (0 nose, 1 left eye,
+// 2 right eye, 3 left ear, 4 right ear, 5/6 shoulders, 7/8 elbows,
+// 9/10 wrists, 11/12 hips, 13-16 knees/ankles). Normalised 0..1, same as
+// the Blaze points above.
+export const COCO_NOSE = 0;
+export const COCO_L_EYE = 1;
+export const COCO_R_EYE = 2;
+export const COCO_L_EAR = 3;
+export const COCO_R_EAR = 4;
+export const COCO_L_SHOULDER = 5;
+export const COCO_R_SHOULDER = 6;
+export const COCO_L_ELBOW = 7;
+export const COCO_R_ELBOW = 8;
+export const COCO_L_WRIST = 9;
+export const COCO_R_WRIST = 10;
+export const COCO_L_HIP = 11;
+export const COCO_R_HIP = 12;
+
+/**
+ * Remap 17 COCO points to the Blaze index slots `buildPoseFrame` reads.
+ * COCO has one eye point per side, so it fans out to the in/eye/out slots;
+ * mouth corners and the index fingertip have no COCO source and degrade to
+ * conf 0, which the builder already handles.
+ */
+export function coco17ToBlaze(coco: Point2D[]): Point2D[] {
+  const blank = (): Point2D => ({ x: 0, y: 0, visibility: 0 });
+  const out: Point2D[] = Array.from({ length: 25 }, blank);
+  const C = (i: number): Point2D => coco[i] ?? blank();
+  out[NOSE] = C(COCO_NOSE);
+  out[L_EYE_IN] = C(COCO_L_EYE);
+  out[L_EYE] = C(COCO_L_EYE);
+  out[L_EYE_OUT] = C(COCO_L_EYE);
+  out[R_EYE_IN] = C(COCO_R_EYE);
+  out[R_EYE] = C(COCO_R_EYE);
+  out[R_EYE_OUT] = C(COCO_R_EYE);
+  out[L_EAR] = C(COCO_L_EAR);
+  out[R_EAR] = C(COCO_R_EAR);
+  out[L_SHOULDER] = C(COCO_L_SHOULDER);
+  out[R_SHOULDER] = C(COCO_R_SHOULDER);
+  out[L_ELBOW] = C(COCO_L_ELBOW);
+  out[R_ELBOW] = C(COCO_R_ELBOW);
+  out[L_WRIST] = C(COCO_L_WRIST);
+  out[R_WRIST] = C(COCO_R_WRIST);
+  out[L_HIP] = C(COCO_L_HIP);
+  out[R_HIP] = C(COCO_R_HIP);
+  return out;
 }
 
 /**

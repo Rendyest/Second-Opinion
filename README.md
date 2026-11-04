@@ -8,11 +8,11 @@ towel, with live movement feedback and coaching tips. Participant routes are
 
 ## Stack
 
-- Web app: React + TypeScript + Vite. Pose estimation runs on MediaPipe —
-  Tasks Vision in the browser for live sessions, Python scripts
-  (`system1_loop.py`, `replay.py`, `quality_gate.py`, `struggle_detector.py`,
-  `video_diagnostics.py`) for the offline loop, replay harness, and
-  diagnostics.
+- Web app: React + TypeScript + Vite. Pose estimation runs in a localhost
+  Python sidecar (Detectron2 Keypoint R-CNN R50-FPN, Meta FAIR) on
+  127.0.0.1 — frames never leave the machine; see "Pose sidecar" below.
+  Offline clip masking (`scripts/mask_clips.py`) uses SAM 3.1 person masks
+  plus an OpenCV YuNet face detector.
 - Live coaching: with consent, a Node proxy (`server/proxy.mjs`) forwards an
   aggregate movement summary to the Muse Spark Responses API and returns a
   tip. When cloud coaching is disabled or a request fails, the app labels the
@@ -20,8 +20,8 @@ towel, with live movement feedback and coaching tips. Participant routes are
 - Mock and synthetic data (never results): `public/mock-stream.json` replays
   a fixed event stream, and `scripts/make-demo-data.mjs` generates
   deterministic synthetic clips for the reviewer routes (gitignored output).
-- No SAM is used and no external datasets are used. (`third_party/sam/`
-  is vendored but unused — nothing imports it.)
+- No external datasets are used. (`third_party/sam/` is vendored but unused
+  — nothing imports it; masking uses the `sam3` package instead.)
 
 ## Live status
 
@@ -70,6 +70,47 @@ Then: `/metrics` → Replay → Choose a clip file; `/review` → Choose a revie
 bundle file; `/validation` reads the generated `results/results.json`. Check
 the plumbing with `npm test -- tests/demoData.test.ts`, which generates into
 a temp folder, validates every output, and scores it.
+
+## Pose sidecar (WSL2 Ubuntu)
+
+Live pose needs the sidecar: Detectron2 has no Windows wheels, so it runs in
+WSL2 Ubuntu while the browser, dev server, and coach proxy stay on Windows
+(`localhost` forwards across automatically). Expect roughly 1–2 s per frame
+on CPU — hold still for checks, calibration, and tips.
+
+One-time setup (Ubuntu terminal):
+
+```bash
+sudo apt update && sudo apt install -y python3-venv python3-pip git build-essential python3-dev curl
+cd /path/to/Second-Opinion
+python3 -m venv server/.venv
+source server/.venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install opencv-contrib-python numpy
+pip install "git+https://github.com/facebookresearch/detectron2.git" --no-build-isolation
+```
+
+Place weights manually (never downloaded): `models/detectron2_keypoint_rcnn_R_50_FPN_3x.pkl` from the Detectron2 model zoo, or set `DETECTRON2_WEIGHTS`. Sapiens checkpoints stay out (CC BY-NC, demo-only).
+
+Every session, three terminals — sidecar (Ubuntu), proxy and dev (Windows PowerShell):
+
+```bash
+python3 server/pose_sidecar.py --port 8788
+```
+
+```powershell
+npm run coach-proxy   # needs MODEL_API_KEY in .env (see .env.example)
+npm run dev
+```
+
+Verify: `Invoke-RestMethod http://127.0.0.1:8788/healthz` answers with the
+model name; the sidecar terminal prints the backend on first detection; each
+live tip logs `coach_live` with `muse-spark-1.3` in the proxy terminal and
+reads "Live tip from Muse Spark." on screen.
+
+Local tuning lives in gitignored `src/config/config.local.json` (for example
+`{ "gate": { "vis_min": 0.3 } }`); the tip button states its own block reason
+on screen when disabled.
 
 ## Recording a real clip and measuring call policies
 

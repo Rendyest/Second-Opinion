@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Joint2D, PoseFrame } from '../src/contracts';
-import { config } from '../src/config';
+import { buildConfig } from '../src/config';
+import defaults from '../src/config/config.default.json';
 import {
   applyGate,
   boneLengths,
@@ -84,7 +85,9 @@ function steadyTracker(n: number, upperArm = 100, forearm = 100, shoulderWidth =
 
 describe('gate thresholds live in config', () => {
   it('matches the committed defaults', () => {
-    expect(config.gate).toEqual(T);
+    // Pinned to config.default.json, not the merged runtime config: local
+    // tuning in gitignored config.local.json must not red the suite.
+    expect(buildConfig(defaults).gate).toEqual(T);
   });
 });
 

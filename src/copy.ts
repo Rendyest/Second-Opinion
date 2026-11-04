@@ -41,10 +41,17 @@ export const CHECKING_IN = 'Checking in...';
 
 export const LOCAL_FALLBACK = 'Take your time. Try slowing down.';
 
-/** Shown under a delivered tip that answered from the live cloud model. */
-export const LIVE_TIP_NOTE = 'Live tip from the cloud model.';
+/** Shown under a delivered tip that answered from the live cloud model. Names the model for the demo. */
+export const LIVE_TIP_NOTE = 'Live tip from Muse Spark.';
 
 export const COACH_BUTTON_LABEL = 'Get a tip';
+
+/** Blocked-tip reasons: the button states its cause instead of failing silently. */
+export const COACH_WAIT_RUNNING = 'Start the session to switch tips on.';
+export const COACH_WAIT_PAUSED = 'Tips are paused with the session.';
+export const COACH_WAIT_TRACKING = 'Tips switch on when tracking finds you.';
+export const COACH_WAIT_COOLING = 'Take a moment — the next tip is on its way.';
+export const COACH_WAIT_FRAME = 'Lower your working arm, or hold still for a clear frame.';
 
 export const AUTO_TIPS_ON = 'Automatic tips: on';
 

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginCapture,
+  CALIBRATION_EVENT,
   clearFaceReach,
+  isClearCalibrationFrame,
   loadCalibrationState,
   loadFaceReach,
   markSkipped,
@@ -9,6 +11,7 @@ import {
   saveFaceReach,
   skipFaceReach,
 } from '../src/pose/calibration';
+import type { PoseFrame } from '../src/contracts';
 
 /** calibration.ts guards on typeof localStorage; node tests stub it here. */
 function stubStorage(): Map<string, string> {
@@ -39,6 +42,46 @@ const FACE = {
   touchDist: 0.2,
   touchElbowDeg: 70,
 };
+
+describe('isClearCalibrationFrame', () => {
+  const frame = (conf: number): PoseFrame => ({
+    t: 0,
+    fps: 30,
+    joints: {
+      r_shoulder: { x: 0.6, y: 0.4, conf },
+      r_elbow: { x: 0.65, y: 0.6, conf },
+      r_wrist: { x: 0.7, y: 0.8, conf },
+      l_shoulder: { x: 0.4, y: 0.4, conf },
+    },
+    angles: {},
+    gate: { ok: true, reasons: [] },
+  });
+
+  it('passes a fully clear frame at the threshold', () => {
+    expect(isClearCalibrationFrame(frame(0.3), 0.3)).toBe(true);
+  });
+
+  it('fails when one joint is missing or below the bar', () => {
+    const unclear = frame(0.9);
+    unclear.joints['r_wrist'] = { x: 0.7, y: 0.8, conf: 0 };
+    expect(isClearCalibrationFrame(unclear, 0.3)).toBe(false);
+    const sparse = frame(0.9) as unknown as Record<string, unknown>;
+    delete (sparse['joints'] as Record<string, unknown>)['l_shoulder'];
+    expect(isClearCalibrationFrame(sparse as unknown as PoseFrame, 0.3)).toBe(false);
+  });
+});
+
+describe('same-tab notification', () => {
+  it('dispatches the calibration event on window for every write', () => {
+    stubStorage();
+    vi.stubGlobal('window', new EventTarget());
+    const seen: string[] = [];
+    (window as unknown as EventTarget).addEventListener(CALIBRATION_EVENT, () => seen.push('x'));
+    saveBaseline(BASELINE);
+    markSkipped();
+    expect(seen).toEqual(['x', 'x']);
+  });
+});
 
 describe('face-reach storage', () => {
   it('stores and reloads the derived numbers only', () => {

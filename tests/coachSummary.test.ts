@@ -6,6 +6,7 @@ import {
   cooldownActive,
   nextEscalation,
   requestCoachMessage,
+  wristBelowShoulder,
 } from '../src/coach/summary';
 import type { Joint2D, PoseFrame } from '../src/contracts';
 
@@ -179,6 +180,42 @@ describe('buildCoachSummary', () => {
       'system1',
       'task',
     ]);
+  });
+});
+
+describe('wristBelowShoulder', () => {
+  const armFrame = (wrist: { x: number; y: number; conf: number }, shoulder: { x: number; y: number; conf: number }): PoseFrame => ({
+    t: 1,
+    fps: 24,
+    joints: {
+      r_wrist: { ...wrist },
+      r_shoulder: { ...shoulder },
+    },
+    angles: {},
+    gate: { ok: false, reasons: ['low_visibility'] },
+  });
+
+  it('is true when the working wrist sits below the shoulder line', () => {
+    expect(
+      wristBelowShoulder(armFrame({ x: 0.6, y: 0.7, conf: 0.4 }, { x: 0.6, y: 0.4, conf: 0.4 })),
+    ).toBe(true);
+  });
+
+  it('is false when the wrist is level with or above the shoulder', () => {
+    expect(
+      wristBelowShoulder(armFrame({ x: 0.6, y: 0.4, conf: 0.9 }, { x: 0.6, y: 0.4, conf: 0.9 })),
+    ).toBe(false);
+    expect(
+      wristBelowShoulder(armFrame({ x: 0.6, y: 0.2, conf: 0.9 }, { x: 0.6, y: 0.4, conf: 0.9 })),
+    ).toBe(false);
+  });
+
+  it('is false without joints, with missing joints, or on zero-confidence defaults', () => {
+    expect(wristBelowShoulder(null)).toBe(false);
+    expect(wristBelowShoulder(frame(1, false))).toBe(false);
+    expect(
+      wristBelowShoulder(armFrame({ x: 0, y: 0, conf: 0 }, { x: 0, y: 0, conf: 0 })),
+    ).toBe(false);
   });
 });
 

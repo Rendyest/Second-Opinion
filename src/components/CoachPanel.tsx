@@ -12,6 +12,11 @@ import {
   COACH_IMPORT_LABEL,
   COACH_PAIN_NOTE,
   COACH_SAFETY_NOTE,
+  COACH_WAIT_COOLING,
+  COACH_WAIT_FRAME,
+  COACH_WAIT_PAUSED,
+  COACH_WAIT_RUNNING,
+  COACH_WAIT_TRACKING,
   LIVE_TIP_NOTE,
   LOCAL_FALLBACK,
   READ_ALOUD_NOTE,
@@ -32,6 +37,7 @@ import {
   buildCoachSummary,
   canRequestCoach,
   cooldownActive,
+  wristBelowShoulder,
   nextEscalation,
   requestCoachMessage,
   type AngleStats,
@@ -149,7 +155,7 @@ export function CoachPanel({
   }, [active, paused, summaryOn, statsEpoch, cantSeeYouActive]);
 
   const request = async (trigger: CoachCallTrigger) => {
-    if (!active || paused || pending.current || !frame?.gate.ok ||
+    if (!active || paused || pending.current || (!frame?.gate.ok && !wristBelowShoulder(frame)) ||
         !canRequestCoach(cantSeeYouActive, cooling)) return;
     if (!summaryOn) {
       onOutcome?.(trigger, 'local');
@@ -157,7 +163,15 @@ export function CoachPanel({
       return;
     }
     const summary = buildCoachSummary(TASK_NAME, stats, systemState, topSignal);
-    if (!summary) return;
+    if (!summary) {
+      // Wrist-down path with nothing coachable yet: deliver the local
+      // tip instead of dying silently, so the button always answers.
+      if (!frame?.gate.ok) {
+        onOutcome?.(trigger, 'local');
+        setStatus('fallback');
+      }
+      return;
+    }
     const controller = new AbortController();
     pending.current = {
       controller,
@@ -219,7 +233,20 @@ export function CoachPanel({
     return () => cancelSpeech();
   }, [status, message, speakTips]);
 
-  const blocked = !active || !frame?.gate.ok || cantSeeYouActive || cooling || paused;
+  const frameUsable = !!frame?.gate.ok || wristBelowShoulder(frame);
+  const blocked = !active || !frameUsable || cantSeeYouActive || cooling || paused;
+  // The button never fails silently: when disabled and idle, it says why.
+  const blockReason = !active
+    ? COACH_WAIT_RUNNING
+    : paused
+      ? COACH_WAIT_PAUSED
+      : cantSeeYouActive
+        ? COACH_WAIT_TRACKING
+        : cooling
+          ? COACH_WAIT_COOLING
+          : !frameUsable
+            ? COACH_WAIT_FRAME
+            : null;
 
   return (
     <section className="panel coaching-panel" aria-label="Coaching">
@@ -282,6 +309,9 @@ export function CoachPanel({
           </button>
         )}
       </div>
+      {blocked && blockReason !== null && status === 'idle' && (
+        <p className="muted">{blockReason}</p>
+      )}
       <details className="coach-import">
         <summary>Import a tip</summary>
         <label>

@@ -3,12 +3,12 @@
 `mask_clips.py` re-exports face-masked copies of local video files for the
 labelling step. It is separate from the web app and shares no code with it.
 
-- Python 3.10, 3.11, 3.12 or 3.13 (64-bit). Pins target 3.13+; `mediapipe==0.10.14`
-  has no wheels for 3.13, so the file pins `0.10.35` with `numpy==2.1.3`.
+- Python 3.10, 3.11, 3.12 or 3.13 (64-bit) with `numpy==2.1.3` and
+  `opencv-contrib-python` (YuNet face detection lives in contrib).
 - No network calls: model files are placed manually in `scripts/models/`
-  (`pose_landmarker.task` and `face_detector.task` from the official
-  MediaPipe model releases). The script never downloads anything and fails
-  with a clear message when a model file is missing.
+  (`sam3_1_person.pt` and `face_detection_yunet_2023mar.onnx`). The script
+  never downloads anything and fails with a clear message when a model
+  file is missing.
 - Thresholds come from the repo-root `config.default.json` (`mask.*`).
   A missing key is an error; tuned values belong in gitignored
   `config.local.json`, which this script does not read.

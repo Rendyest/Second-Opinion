@@ -1,8 +1,8 @@
 """Face-mask local clips for the labelling step. Standalone; shares no code
 with the web app.
 
-Reads mp4 files from a folder, masks every head it can find (MediaPipe
-Pose head points UNION face-detector boxes, opaque fill), and writes
+Reads mp4 files from a folder, masks every head it can find (SAM 3.1
+person-mask head region UNION YuNet face boxes, opaque fill), and writes
 video-only masked copies to scripts/masked/<random-id>.mp4 plus a local-only
 scripts/masked/_index.csv mapping ids to source names.
 
@@ -26,12 +26,20 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-# BlazePose head points, same 33-landmark topology the web app pins in
-# src/pose/poseFrame.ts: nose, eyes, ears, mouth corners.
+# Head points are sampled from the SAM 3.1 person mask (upper region), so
+# this keeps the historical name only: detectors return mask samples, not
+# BlazePose indices.
 HEAD_LANDMARKS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 
-POSE_MODEL_NAME = "pose_landmarker.task"
-FACE_MODEL_NAME = "face_detector.task"
+SAM_MODEL_NAME = "sam3_1_person.pt"
+FACE_MODEL_NAME = "face_detection_yunet_2023mar.onnx"
+# Upper fraction of a person mask treated as the head region. Upright
+# framing puts the head at the top; the margin config still applies after.
+HEAD_TOP_FRAC = 0.28
+# Grid stride (px) when sampling head-mask points for head_box_from_points.
+MASK_SAMPLE_STRIDE = 8
+# YuNet detection threshold. Higher misses small faces; lower adds noise.
+YUNET_SCORE_THRESH = 0.6
 
 # (x0, y0, x1, y1) in pixels, x1 > x0 and y1 > y0.
 Box = tuple
@@ -295,69 +303,115 @@ def is_unusable(outcome: ClipOutcome, cfg: MaskConfig) -> bool:
 
 
 def build_detectors(models_dir: Path):
-    """Load the real detectors. Missing files abort with no output."""
-    pose_path = models_dir / POSE_MODEL_NAME
+    """Load the real detectors. Missing files abort with no output.
+
+    Returns (sam_predictor, yunet_detector). Sapiens checkpoints are
+    deliberately not wired in: they are CC BY-NC and must stay out of the
+    MIT release, so this path is SAM 3.1 plus OpenCV YuNet only.
+    """
+    sam_path = models_dir / SAM_MODEL_NAME
     face_path = models_dir / FACE_MODEL_NAME
-    missing = [p.name for p in (pose_path, face_path) if not p.is_file()]
+    missing = [p.name for p in (sam_path, face_path) if not p.is_file()]
     if missing:
         raise MaskError(
             f"model file(s) missing in {models_dir}: {', '.join(missing)}. "
             "Place them there manually; this script never downloads models."
         )
     try:
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision as mp_vision
-
-        pose = mp_vision.PoseLandmarker.create_from_options(
-            mp_python.BaseOptions(model_asset_path=str(pose_path))
-        )
-        face = mp_vision.FaceDetector.create_from_options(
-            mp_python.BaseOptions(model_asset_path=str(face_path))
+        sam = load_sam_predictor(sam_path)
+        yunet = cv2.FaceDetectorYN.create(
+            str(face_path), "", (320, 320), YUNET_SCORE_THRESH
         )
     except Exception as e:
         raise MaskError(f"detectors cannot load: {e}")
-    return pose, face
+    return sam, yunet
+
+
+def load_sam_predictor(sam_path: Path):
+    """Load a SAM 3.1 person-segmentation predictor from a local checkpoint.
+
+    Supports the `sam3` package (`Sam3Processor`/`Sam3Model`) when installed;
+    anything else raises and build_detectors fails closed. No downloads.
+    """
+    try:
+        from sam3 import Sam3Model, Sam3Processor  # type: ignore
+    except Exception as e:
+        raise MaskError(f"SAM 3.1 backend missing (pip install sam3): {e}")
+    try:
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = Sam3Model.from_pretrained(str(sam_path)).to(device).eval()
+        return (Sam3Processor.from_pretrained(str(sam_path)), model, device)
+    except Exception as e:
+        raise MaskError(f"SAM 3.1 weights cannot load: {e}")
+
+
+def sam_person_mask(sam, rgb: np.ndarray) -> np.ndarray | None:
+    """Largest person mask for the frame, or None when no person is found."""
+    processor, model, device = sam
+    import torch
+
+    inputs = processor(images=rgb, return_tensors="pt")
+    inputs = {k: (v.to(device) if hasattr(v, "to") else v) for k, v in inputs.items()}
+    with torch.no_grad():
+        outputs = model(**inputs)
+    masks = processor.post_process_masks(outputs)[0]
+    if masks is None or len(masks) == 0:
+        return None
+    import numpy as np
+
+    areas = [float((m > 0).sum()) for m in masks]
+    best = masks[int(np.argmax(areas))]
+    return (best > 0).astype(np.uint8)
 
 
 def make_pose_fn(pose, width: int, height: int):
-    import mediapipe as mp
-    from mediapipe.tasks.python import vision as mp_vision
+    """Sample head-region points from the SAM 3.1 person mask.
+
+    Keeps the historical pose_fn signature so head_box_from_points and the
+    injected-fake tests are untouched: returns [(x, y, visibility)] in
+    pixels, visibility 1.0 inside the head region, [] when no person mask.
+    """
 
     def pose_fn(rgb: np.ndarray, idx: int, fps: float = 30.0):
-        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        result = pose.detect_for_video(image, int(round(idx * 1000.0 / fps)))
-        landmarks = (result.pose_landmarks or [None])[0]
-        if not landmarks:
+        try:
+            mask = sam_person_mask(pose, rgb)
+        except Exception:
             return []
+        if mask is None:
+            return []
+        ys, xs = np.nonzero(mask)
+        if len(xs) == 0:
+            return []
+        top = int(ys.min() + HEAD_TOP_FRAC * (ys.max() - ys.min() + 1))
+        head = mask.copy()
+        head[top + 1 :, :] = 0
         out = []
-        for i in HEAD_LANDMARKS:
-            if i >= len(landmarks):
-                continue
-            lm = landmarks[i]
-            vis = lm.visibility if lm.visibility is not None else 0.0
-            out.append((lm.x * width, lm.y * height, vis))
+        for y in range(0, height, MASK_SAMPLE_STRIDE):
+            for x in range(0, width, MASK_SAMPLE_STRIDE):
+                if head[y, x]:
+                    out.append((float(x), float(y), 1.0))
         return out
 
     return pose_fn
 
 
 def make_face_fn(face, width: int, height: int):
-    import mediapipe as mp
-    from mediapipe.tasks.python import vision as mp_vision
+    """YuNet face boxes in pixels. Empty when no face or on backend errors."""
 
-    # Task-API boxes are normalised; the pinned mediapipe version keeps them so.
     def face_fn(rgb: np.ndarray, idx: int, fps: float = 30.0):
-        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        result = face.detect_for_video(image, int(round(idx * 1000.0 / fps)))
+        try:
+            face.setInputSize((width, height))
+            _, faces = face.detect(rgb)
+        except Exception:
+            return []
+        if faces is None:
+            return []
         boxes = []
-        for det in result.detections or []:
-            b = det.bounding_box
-            boxes.append((
-                int(b.origin_x * width),
-                int(b.origin_y * height),
-                int((b.origin_x + b.width) * width),
-                int((b.origin_y + b.height) * height),
-            ))
+        for f in faces:
+            x, y, w, h = (int(v) for v in f[:4])
+            boxes.append((x, y, x + w, y + h))
         return boxes
 
     return face_fn

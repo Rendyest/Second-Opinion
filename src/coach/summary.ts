@@ -131,6 +131,20 @@ export function buildCoachSummary(
   };
 }
 
+/**
+ * Wrist-down alternate: the working wrist sits below the shoulder line
+ * (image y grows downward). Positions with conf 0 are the (0,0) defaults,
+ * so both joints must actually be present. Gate-independent on purpose:
+ * tips must come online while the person moves, when the gate rightly
+ * flags frames.
+ */
+export function wristBelowShoulder(frame: PoseFrame | null): boolean {
+  const wrist = frame?.joints['r_wrist'];
+  const shoulder = frame?.joints['r_shoulder'];
+  if (!wrist || !shoulder || !(wrist.conf > 0) || !(shoulder.conf > 0)) return false;
+  return wrist.y > shoulder.y;
+}
+
 /** Cooldown is active until the stored timestamp passes. Starts after every call. */
 export function cooldownActive(cooldownUntilMs: number, nowMs: number): boolean {
   return nowMs < cooldownUntilMs;

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConsent } from '../src/consent/consent';
-import { useLivePose } from '../src/pose/useLivePose';
+import { __setPoseDetectorFactory, useLivePose } from '../src/pose/useLivePose';
 
 // Drive the real hook and its effect cleanup without adding a DOM dependency.
 const hooks = vi.hoisted(() => ({
@@ -10,7 +10,7 @@ const hooks = vi.hoisted(() => ({
   cleanups: [] as (() => void)[],
 }));
 vi.mock('react', async (importOriginal) => ({
-  ...await importOriginal<typeof import('react')>(),
+  ...(await importOriginal<typeof import('react')>()),
   useRef<T>(value: T) {
     const index = hooks.cursor++;
     return hooks.slots[index] ?? (hooks.slots[index] = { current: value });
@@ -29,12 +29,6 @@ vi.mock('react', async (importOriginal) => ({
       if (cleanup) hooks.cleanups.push(cleanup);
     }
   },
-}));
-
-const createModel = vi.hoisted(() => vi.fn());
-vi.mock('@mediapipe/tasks-vision', () => ({
-  FilesetResolver: { forVisionTasks: vi.fn().mockResolvedValue({}) },
-  PoseLandmarker: { createFromOptions: createModel },
 }));
 
 function deferred<T>() {
@@ -64,7 +58,7 @@ function unmount() {
 
 const getUserMedia = vi.fn();
 const close = vi.fn();
-const detectForVideo = vi.fn();
+const detectPoints = vi.fn();
 const play = vi.fn();
 let video: { srcObject: MediaStream | null; play: typeof play; readyState: number; currentTime: number };
 let nextFrame: FrameRequestCallback;
@@ -89,7 +83,8 @@ beforeEach(() => {
     return 1;
   }));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
-  createModel.mockResolvedValue({ close, detectForVideo });
+  detectPoints.mockResolvedValue(undefined);
+  __setPoseDetectorFactory(() => ({ close, detect: detectPoints }));
   play.mockResolvedValue(undefined);
   video = { srcObject: null, play, readyState: 2, currentTime: 0 };
   const live = render();
@@ -99,18 +94,20 @@ beforeEach(() => {
 
 afterEach(() => {
   unmount();
+  __setPoseDetectorFactory(null);
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe('live camera lifecycle', () => {
-  it('closes a model that finishes loading after Stop without requesting the camera', async () => {
-    const model = deferred<{ close: typeof close }>();
-    createModel.mockReturnValueOnce(model.promise);
+  it('closes a detector that finishes loading after Stop without requesting the camera', async () => {
+    const model = deferred<{ close: typeof close; detect: typeof detectPoints }>();
+    const factory = vi.fn(() => model.promise);
+    __setPoseDetectorFactory(factory);
     render().start();
-    await vi.waitFor(() => expect(createModel).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(factory).toHaveBeenCalledOnce());
     render().stop();
-    model.resolve({ close });
+    model.resolve({ close, detect: detectPoints });
     await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect(getUserMedia).not.toHaveBeenCalled();
     expect(render().status).toBe('idle');
@@ -193,18 +190,18 @@ describe('live camera lifecycle', () => {
     const { stream } = fakeStream();
     getUserMedia.mockResolvedValueOnce(stream);
     const points = [{ x: 0.5, y: 0.5, visibility: 1 }];
-    detectForVideo.mockReturnValueOnce({ landmarks: [points] })
-      .mockReturnValueOnce({ landmarks: [] }).mockReturnValueOnce({ landmarks: [points] });
+    detectPoints.mockResolvedValueOnce(points).mockResolvedValueOnce(undefined).mockResolvedValueOnce(points);
     render().start();
     await vi.waitFor(() => expect(render().status).toBe('live'));
     nextFrame(now = 100);
+    await vi.waitFor(() => expect(render().frame).not.toBeNull());
     const first = render().frame;
     expect(first).not.toBeNull();
     nextFrame(now = 200);
-    expect(render()).toMatchObject({ status: 'live', frame: null, trackingLost: true });
+    await vi.waitFor(() => expect(render()).toMatchObject({ status: 'live', frame: null, trackingLost: true }));
     video.currentTime = 0.3;
     nextFrame(now = 300);
-    expect(render()).toMatchObject({ trackingLost: false, frame: { t: 0.3 } });
+    await vi.waitFor(() => expect(render()).toMatchObject({ trackingLost: false, frame: { t: 0.3 } }));
     expect(render().frame).not.toBe(first);
   });
 });

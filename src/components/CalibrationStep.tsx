@@ -4,9 +4,11 @@ import { config } from '../config';
 import { useLivePose } from '../pose/useLivePose';
 import { statusText } from '../pose/statusText';
 import {
-  CALIBRATION_CAPTURE_MS,
+  CALIBRATION_CAPTURE_TIMEOUT_MS,
+  CALIBRATION_MIN_SAMPLES,
   GATE_JOINT_LABELS,
   calibrateFrames,
+  isClearCalibrationFrame,
   unclearJoints,
   useCalibration,
 } from '../pose/calibration';
@@ -88,15 +90,14 @@ export function CalibrationStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, live.frame, live.status]);
 
-  // Timed capture: sample the live frames for ~2 s, then pass or fail.
+  // Capture: collect distinct live frames until enough clear views arrive,
+  // then pass or fail. Fixed 2 s windows starve on slow inference (frames
+  // arrive seconds apart), so this waits up to an outer timeout instead.
   useEffect(() => {
     if (phase !== 'capturing') return;
     const samples: PoseFrame[] = [];
-    const sampler = window.setInterval(() => {
-      const latest = frameRef.current;
-      if (latest) samples.push(latest);
-    }, 100);
-    const timer = window.setTimeout(() => {
+    const startedAt = Date.now();
+    const finish = () => {
       window.clearInterval(sampler);
       live.stop();
       setPhase('idle');
@@ -116,10 +117,19 @@ export function CalibrationStep() {
           `Calibration failed: ${names.join(', ')} unclear. Move so your shoulders and arms are all visible, then try again.`,
         );
       }
-    }, CALIBRATION_CAPTURE_MS);
+    };
+    const sampler = window.setInterval(() => {
+      const latest = frameRef.current;
+      if (latest && latest !== samples[samples.length - 1]) samples.push(latest);
+      // Finish on enough CLEAR frames, not just frames: borderline scores
+      // mean most frames filter out, so count what survives the filter.
+      const clear = samples.filter((s) => isClearCalibrationFrame(s, config.gate.vis_min)).length;
+      if (clear >= CALIBRATION_MIN_SAMPLES || Date.now() - startedAt >= CALIBRATION_CAPTURE_TIMEOUT_MS) {
+        finish();
+      }
+    }, 250);
     return () => {
       window.clearInterval(sampler);
-      window.clearTimeout(timer);
     };
     // The capture runs once per start; frameRef always holds the latest frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,7 +162,7 @@ export function CalibrationStep() {
       <h2>Arm Calibration</h2>
       <p>
         Sit facing the camera, arms relaxed. Ensure your shoulder, elbows and wrists are in view. We measure your upper arm, forearm, and shoulder
-        width during a 2-second capture.
+        width, holding still until enough clear views arrive.
       </p>
       {passed && state.baseline && (
         <p>

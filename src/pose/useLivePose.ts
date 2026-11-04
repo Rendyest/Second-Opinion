@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Joint2D, PoseFrame } from '../contracts';
 import { config } from '../config';
 import { buildPoseFrame } from './poseFrame';
-import { cameraErrorMessage, OFFLINE_MESSAGE } from './cameraErrors';
+import { cameraErrorMessage } from './cameraErrors';
 import { publishGateDetails, publishLiveStats, type GateBoneDetails, type GateDetails } from './liveStats';
 import {
   createGateTracker,
@@ -17,20 +16,29 @@ import {
 import { loadCalibrationState } from './calibration';
 import { canUseCamera, loadConsent, subscribeCameraWithdrawal } from '../consent/consent';
 import { CONSENT_CAMERA_NEED } from '../consentCopy';
+import {
+  POSE_SIDECAR_URL,
+  createSidecarPoseDetector,
+  type PoseDetector,
+} from './poseProvider';
 /**
- * Where the model file is loaded from (the only runtime network calls this
- * slice makes, besides the local dev server):
- * - Pose weights (pose_landmarker_lite.task): Google's MediaPipe model
- *   bucket, pinned version path below. `latest` is a moving target and has
- *   silently changed model bytes before, so we pin `/1/` instead.
- * - WASM runtime: jsDelivr copy of this package's own wasm, derived from
- *   TASKS_VISION_VERSION so the package and WASM versions cannot drift.
- * The npm package (@mediapipe/tasks-vision) ships only the JS wrapper.
+ * Where pose inference runs (the only runtime network calls this
+ * slice makes, besides the local dev server and sidecar):
+ * - Pose inference: localhost Detectron2 sidecar (POSE_SIDECAR_URL).
+ *   Video frames are POSTed to 127.0.0.1 and never leave the machine.
+ *   The sidecar returns COCO-17 points, remapped client-side to the Blaze
+ *   slots buildPoseFrame expects (see pose/poseProvider.ts).
  */
-export const TASKS_VISION_VERSION = '0.10.14';
-export const POSE_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
-const VISION_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`;
+export const POSE_SIDECAR_DEFAULT_URL = POSE_SIDECAR_URL;
+export const SIDECAR_MESSAGE =
+  'Pose sidecar is not running. Start it with `python server/pose_sidecar.py` - Mock replay still works.';
+
+/** Injectable detector factory so tests can supply a fake without a server. */
+export type PoseDetectorFactory = () => PoseDetector | Promise<PoseDetector>;
+let detectorFactory: PoseDetectorFactory = () => createSidecarPoseDetector();
+export function __setPoseDetectorFactory(f: PoseDetectorFactory | null): void {
+  detectorFactory = f ?? (() => createSidecarPoseDetector());
+}
 
 export type LiveStatus = 'idle' | 'loading' | 'live' | 'denied' | 'error';
 
@@ -47,7 +55,7 @@ export interface LivePose {
 }
 
 interface CameraRun {
-  landmarker?: PoseLandmarker;
+  detector?: PoseDetector;
   stream?: MediaStream;
   video?: HTMLVideoElement;
 }
@@ -130,7 +138,7 @@ export function useLivePose(): LivePose {
     if (run) {
       if (run.video && run.video.srcObject === run.stream) run.video.srcObject = null;
       run.stream?.getTracks().forEach((track) => track.stop());
-      run.landmarker?.close();
+      run.detector?.close();
     }
     gateTrackerRef.current.reset();
     gateBaselineRef.current = null;
@@ -177,29 +185,21 @@ export function useLivePose(): LivePose {
 
     (async () => {
       try {
-        let landmarker: PoseLandmarker;
+        let detector: PoseDetector;
         try {
-          const vision = await import('@mediapipe/tasks-vision');
-          if (!isCurrent()) return;
-          const resolver = await vision.FilesetResolver.forVisionTasks(VISION_WASM_URL);
-          if (!isCurrent()) return;
-          landmarker = await vision.PoseLandmarker.createFromOptions(resolver, {
-            baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: 'GPU' },
-            runningMode: 'VIDEO',
-            numPoses: 1,
-          });
+          detector = await detectorFactory();
         } catch {
           if (!isCurrent()) return;
           stop();
           setStatus('error');
-          setError(OFFLINE_MESSAGE);
+          setError(SIDECAR_MESSAGE);
           return;
         }
         if (!isCurrent()) {
-          landmarker.close();
+          detector.close();
           return;
         }
-        run.landmarker = landmarker;
+        run.detector = detector;
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
@@ -221,23 +221,10 @@ export function useLivePose(): LivePose {
         lastGatePublishRef.current = 0;
         fpsRef.current = 0;
         let lost = false;
+        let inFlight = false;
 
-        const loop = () => {
+        const handlePoints = (points: { x: number; y: number; visibility?: number }[] | undefined) => {
           if (!isCurrent()) return;
-          rafRef.current = requestAnimationFrame(loop);
-          if (video.readyState < 2) return;
-          const now = performance.now();
-          const dt = now - lastTRef.current;
-          lastTRef.current = now;
-          if (dt > 0) {
-            const inst = 1000 / dt;
-            fpsRef.current = fpsRef.current === 0 ? inst : fpsRef.current * 0.9 + inst * 0.1;
-            setFps(Math.round(fpsRef.current));
-          }
-          // Emit at most ui.live_emit_hz: the UI must not compete with inference.
-          if (now - lastEmitRef.current < 1000 / config.ui.live_emit_hz) return;
-          lastEmitRef.current = now;
-          const points = landmarker.detectForVideo(video, now).landmarks?.[0];
           if (!points?.length) {
             if (!lost) {
               lost = true;
@@ -263,12 +250,38 @@ export function useLivePose(): LivePose {
           setFrame(nextFrame);
           // Dev panel updates at most the slower of the readout and emit rates.
           const gatePublishIntervalMs = 1000 / Math.min(config.ui.readout_hz, config.ui.live_emit_hz);
+          const now = performance.now();
           if (now - lastGatePublishRef.current >= gatePublishIntervalMs) {
             lastGatePublishRef.current = now;
             publishGateDetails(
               buildGateDetails(nextFrame.joints, baseline, config.gate, gateTracker.snapshot(), gateResult),
             );
           }
+        };
+
+        const loop = () => {
+          if (!isCurrent()) return;
+          rafRef.current = requestAnimationFrame(loop);
+          if (video.readyState < 2) return;
+          const now = performance.now();
+          const dt = now - lastTRef.current;
+          lastTRef.current = now;
+          if (dt > 0) {
+            const inst = 1000 / dt;
+            fpsRef.current = fpsRef.current === 0 ? inst : fpsRef.current * 0.9 + inst * 0.1;
+            setFps(Math.round(fpsRef.current));
+          }
+          // Emit at most ui.live_emit_hz: the UI must not compete with inference.
+          if (now - lastEmitRef.current < 1000 / config.ui.live_emit_hz) return;
+          if (inFlight) return;
+          lastEmitRef.current = now;
+          inFlight = true;
+          void detector
+            .detect(video, now)
+            .then(handlePoints)
+            .finally(() => {
+              inFlight = false;
+            });
         };
         rafRef.current = requestAnimationFrame(loop);
       } catch (e: unknown) {

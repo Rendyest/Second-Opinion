@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PoseLandmarker } from '@mediapipe/tasks-vision';
+import { checkSidecarHealth, createSidecarPoseDetector, type PoseDetector } from '../pose/poseProvider';
 import { buildClip, type ClipSample } from '../pipeline/clip';
 import { config } from '../config';
 import { buildPoseFrame } from '../pose/poseFrame';
-import { POSE_MODEL_URL, TASKS_VISION_VERSION } from '../pose/useLivePose';
+import { SIDECAR_MESSAGE } from '../pose/useLivePose';
 import { useCalibration } from '../pose/calibration';
 import { canSendClip, useConsent } from '../consent/consent';
 import { downloadJsonFile } from './ClipRecorder';
@@ -18,7 +18,6 @@ import {
   IMPORT_LOW_PICTURES_WARNING,
   IMPORT_MIRROR_LABEL,
   IMPORT_NO_DURATION,
-  IMPORT_NO_POSE,
   IMPORT_NO_RVFC,
   IMPORT_NO_VIDEO,
   IMPORT_PARTICIPANT_LABEL,
@@ -40,11 +39,11 @@ type ImportPhase = 'idle' | 'importing' | 'done';
 /**
  * Dev-only video import inside the slice 5 recorder section (never on
  * /session). A local .mp4 plays in a hidden <video> via an object URL; each
- * decoded frame runs the same pose model and the same pure joint builder
- * (buildPoseFrame) as the live hook, with clip time from the video's own
- * media time. The video is never sent anywhere and no pictures are written
- * anywhere. The only export is the Download button, through the same clip
- * gate as a live recording.
+ * decoded frame goes to the localhost Detectron2 sidecar and through the
+ * same pure joint builder (buildPoseFrame) as the live hook, with clip time
+ * from the video's own media time. Frames stay on this machine (sidecar on
+ * 127.0.0.1) and no pictures are written anywhere. The only export is the
+ * Download button, through the same clip gate as a live recording.
  *
  * Rotation: browsers apply an .mp4 rotation tag to the decoded <video>
  * frames, so landmarks arrive upright. There is no script-readable rotation
@@ -73,7 +72,7 @@ export function VideoImport() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const urlRef = useRef<string | null>(null);
-  const landmarkerRef = useRef<PoseLandmarker | null>(null);
+  const detectorRef = useRef<PoseDetector | null>(null);
   const samplesRef = useRef<ClipSample[]>([]);
   const decodedRef = useRef(0);
   const baseRef = useRef(calibration);
@@ -102,7 +101,7 @@ export function VideoImport() {
   const onFile = (file: File | undefined) => {
     if (!file) return;
     revokeUrl();
-    landmarkerRef.current = null;
+    detectorRef.current = null;
     samplesRef.current = [];
     decodedRef.current = 0;
     setClipText(null);
@@ -161,51 +160,46 @@ export function VideoImport() {
     setPhase('importing');
 
     void (async () => {
-      try {
-        const vision = await import('@mediapipe/tasks-vision');
-        const resolver = await vision.FilesetResolver.forVisionTasks(
-          `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`,
-        );
-        landmarkerRef.current = await vision.PoseLandmarker.createFromOptions(resolver, {
-          baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: 'GPU' },
-          runningMode: 'VIDEO',
-          numPoses: 1,
-        });
-      } catch {
-        landmarkerRef.current = null;
-        setError(IMPORT_NO_POSE);
+      if (!(await checkSidecarHealth())) {
+        detectorRef.current = null;
+        setError(SIDECAR_MESSAGE);
         setPhase('idle');
         return;
       }
-      const landmarker = landmarkerRef.current;
-      if (!landmarker) {
-        setError(IMPORT_NO_POSE);
+      detectorRef.current = createSidecarPoseDetector();
+      const detector = detectorRef.current;
+      if (!detector) {
+        setError(SIDECAR_MESSAGE);
         setPhase('idle');
         return;
       }
       // Frame pump driven by the video clock: each callback reads its own
-      // media time, so t tracks the file, not the wall clock.
+      // media time, so t tracks the file, not the wall clock. Detection is
+      // async (localhost sidecar), so frames chain sequentially in order.
+      let chain: Promise<void> = Promise.resolve();
       const pump = (_now: number, md: { mediaTime: number }) => {
         const v = videoRef.current;
-        const lm = landmarkerRef.current;
-        if (!v || !lm) return;
+        const dt = detectorRef.current;
+        if (!v || !dt) return;
         if (!v.ended) {
           (v as unknown as { requestVideoFrameCallback: (cb: typeof pump) => void }).requestVideoFrameCallback(pump);
         }
         const t = mediaTimeToClipT(md.mediaTime);
         setMediaS(md.mediaTime);
         const tMs = Math.round(md.mediaTime * 1000);
-        let points: Array<{ x: number; y: number; visibility?: number }> | undefined;
-        try {
-          points = lm.detectForVideo(v, tMs).landmarks?.[0];
-        } catch {
-          points = undefined;
-        }
         decodedRef.current += 1;
-        if (!points) return; // nobody in view: the gap stays a gap
-        const frame = buildPoseFrame(points, md.mediaTime, 30);
-        samplesRef.current.push({ t, joints: applyMirror(frame.joints, mirror) });
-        setProcessed(samplesRef.current.length);
+        chain = chain.then(async () => {
+          let points: Array<{ x: number; y: number; visibility?: number }> | undefined;
+          try {
+            points = await dt.detect(v, tMs);
+          } catch {
+            points = undefined;
+          }
+          if (!points) return; // nobody in view: the gap stays a gap
+          const frame = buildPoseFrame(points, md.mediaTime, 30);
+          samplesRef.current.push({ t, joints: applyMirror(frame.joints, mirror) });
+          setProcessed(samplesRef.current.length);
+        });
       };
       try {
         video.currentTime = 0;
@@ -223,8 +217,8 @@ export function VideoImport() {
   const finish = () => {
     const video = videoRef.current;
     video?.pause();
-    landmarkerRef.current?.close();
-    landmarkerRef.current = null;
+    detectorRef.current?.close();
+    detectorRef.current = null;
     const samples = samplesRef.current;
     const duration = video && Number.isFinite(video.duration) ? video.duration : 0;
     const decoded = decodedRef.current;
@@ -279,8 +273,8 @@ export function VideoImport() {
   };
 
   const discard = () => {
-    landmarkerRef.current?.close();
-    landmarkerRef.current = null;
+    detectorRef.current?.close();
+    detectorRef.current = null;
     videoRef.current?.pause();
     samplesRef.current = [];
     setClipText(null);

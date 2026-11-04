@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CoachPanel } from '../src/components/CoachPanel';
 import { Children, isValidElement, type ComponentProps, type ReactNode } from 'react';
+import { COACH_WAIT_FRAME, LIVE_TIP_NOTE } from '../src/copy';
+import type { PoseFrame } from '../src/contracts';
 
 type Effect = { deps?: readonly unknown[]; cleanup?: () => void };
 
@@ -117,7 +119,7 @@ it('uses the manual request path and labels an unavailable cloud response as loc
   expect(click).toBeDefined();
   click?.();
   await vi.waitFor(() => expect(render()).toContain('Local tip:'));
-  expect(render()).not.toContain('Live tip from the cloud model.');
+  expect(render()).not.toContain(LIVE_TIP_NOTE);
   expect(fetchCoach).toHaveBeenCalledOnce();
 });
 
@@ -145,4 +147,26 @@ it.each([
   respond(Response.json({ message: 'Late cue.' }));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(render({ escalationId: 1 })).not.toContain('Late cue.');
+});
+
+
+function dirtyFrame(wristY: number): PoseFrame {
+  return {
+    t: 2,
+    fps: 24,
+    joints: {
+      r_wrist: { x: 0.6, y: wristY, conf: 0.4 },
+      r_shoulder: { x: 0.6, y: 0.4, conf: 0.4 },
+    },
+    angles: { r_elbow_flexion: { deg: 100, conf: 0.4 } },
+    gate: { ok: false, reasons: ['low_visibility'] },
+  };
+}
+
+it('states the frame reason on a dirty frame with the wrist up', () => {
+  expect(render({ frame: dirtyFrame(0.2) })).toContain(COACH_WAIT_FRAME);
+});
+
+it('states no reason when the dropped wrist brings the button online', () => {
+  expect(render({ frame: dirtyFrame(0.7) })).not.toContain(COACH_WAIT_FRAME);
 });

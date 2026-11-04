@@ -165,12 +165,18 @@ export function SetupChecks() {
       const cutoff = now - config.setup.fps_window_s * 1000;
       while (stamps.length > 0 && (stamps[0] as number) <= cutoff) stamps.shift();
     }
+    // Speed is the camera rate (rAF-measured in the hook), gated on a
+    // heartbeat: inference frames arrive seconds apart on CPU, so counting
+    // them can never reach fps_min. The heartbeat ages out if the loop dies.
+    const heartbeatOk =
+      fpsOverWindow(stampsRef.current, performance.now(), config.setup.fps_window_s) !== null;
+    const cameraFps = live.status === 'live' && heartbeatOk && live.fps >= 1 ? Math.round(live.fps) : null;
     const raw = evaluateSetupChecks(
       buildMeasurements(
         frame,
         live.status === 'live',
         brightnessRef.current,
-        fpsOverWindow(stampsRef.current, performance.now(), config.setup.fps_window_s),
+        cameraFps,
         calibration.baseline !== null,
         calibration.face !== null || calibration.faceSkipped,
       ),
@@ -196,7 +202,21 @@ export function SetupChecks() {
     });
     // Debounced values only; brightness arrives through its ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live.frame, live.status, calibration.baseline, calibration.face, calibration.faceSkipped]);
+  }, [live.frame, live.status, live.fps, calibration.baseline, calibration.face, calibration.faceSkipped]);
+
+  // Heartbeat stamps while the camera loop is alive: proves liveness even
+  // when inference frames trickle in seconds apart.
+  useEffect(() => {
+    if (live.status !== 'live') return;
+    const timer = window.setInterval(() => {
+      stampsRef.current.push(performance.now());
+      const cutoff = performance.now() - config.setup.fps_window_s * 1000;
+      while (stampsRef.current.length > 0 && (stampsRef.current[0] as number) <= cutoff) {
+        stampsRef.current.shift();
+      }
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [live.status]);
 
   // Lighting: mean luma of a small in-memory canvas frame, discarded at once.
   // Never stored, never sent — only the mean feeds the advisory check.

@@ -6,10 +6,20 @@ import { isFaceReach, type FaceReach } from './faceReach';
 /** Capture window for the setup calibration step ("about 2 s"). */
 export const CALIBRATION_CAPTURE_MS = 2000;
 
+/** Outer wait while frames trickle in on slow inference. */
+export const CALIBRATION_CAPTURE_TIMEOUT_MS = 30000;
+
 /** Minimum clear views inside the capture window for a passing calibration. */
 export const CALIBRATION_MIN_SAMPLES = 5;
 
 const STORAGE_KEY = 'mirra.calibration.v1';
+
+/**
+ * Same-tab notification: `storage` events only fire in OTHER tabs, so every
+ * local write also dispatches this on window for sibling hook instances
+ * (SetupChecks vs CalibrationStep) on this page.
+ */
+export const CALIBRATION_EVENT = 'mirra:calibration';
 
 export interface CalibrationState {
   baseline: BoneBaseline | null;
@@ -71,6 +81,13 @@ function writeCalibrationState(state: CalibrationState): CalibrationState {
     }
   } catch {
     // Private mode or quota: the in-memory state still works for this visit.
+  }
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event !== 'undefined') {
+      window.dispatchEvent(new Event(CALIBRATION_EVENT));
+    }
+  } catch {
+    // Non-DOM test shims without Event: storage event still covers other tabs.
   }
   return state;
 }
@@ -141,7 +158,15 @@ export function clearFaceReach(): CalibrationState {
 }
 
 /** Every joint calibration needs: the working arm plus the left shoulder that anchors scale. */
-const CALIBRATION_JOINTS: readonly string[] = [...GATE_JOINTS, 'l_shoulder'];
+export const CALIBRATION_JOINTS: readonly string[] = [...GATE_JOINTS, 'l_shoulder'];
+
+/** True when every calibration joint is clear in this frame. */
+export function isClearCalibrationFrame(frame: PoseFrame, visMin: number): boolean {
+  return CALIBRATION_JOINTS.every((name) => {
+    const joint = frame.joints[name];
+    return !!joint && joint.conf >= visMin;
+  });
+}
 
 /**
  * Average the bone lengths over the clear views in a capture: every needed
@@ -200,11 +225,17 @@ export function useCalibration() {
   const [state, setState] = useState<CalibrationState>(() => loadCalibrationState());
 
   useEffect(() => {
+    const refresh = () => setState(loadCalibrationState());
     const onStorage = (e: StorageEvent) => {
-      if (!e.key || e.key === STORAGE_KEY) setState(loadCalibrationState());
+      if (!e.key || e.key === STORAGE_KEY) refresh();
     };
+    const onLocal = () => refresh();
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener(CALIBRATION_EVENT, onLocal);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(CALIBRATION_EVENT, onLocal);
+    };
   }, []);
 
   return {

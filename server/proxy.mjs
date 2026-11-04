@@ -20,6 +20,8 @@ import { validateCoachSummary } from './validate.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BODY_LIMIT = 100 * 1024;
 const MUSE_RESPONSES_URL = 'https://api.meta.ai/v1/responses';
+/** Model judges must see named in the terminal log and on screen. */
+const COACH_MODEL = 'muse-spark-1.3';
 
 function loadCoachConfig() {
   const raw = readFileSync(path.join(ROOT, 'src', 'config', 'config.default.json'), 'utf-8');
@@ -172,7 +174,7 @@ export function createCoachServer({ apiKey, timeoutMs, cooldownMs, maxReplyChars
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: 'muse-spark-1.3',
+          model: COACH_MODEL,
           input: `${PROMPT_INSTRUCTION}\n\nMovement observations:\n${JSON.stringify(neutralizeSummary(body))}`,
           reasoning: { effort: 'low' },
           max_output_tokens: 1200,
@@ -195,6 +197,7 @@ export function createCoachServer({ apiKey, timeoutMs, cooldownMs, maxReplyChars
         json(res, 502, { error: 'coach reply rejected' });
         return;
       }
+      console.log({ event: 'coach_live', model: COACH_MODEL });
       json(res, 200, { message });
     } catch {
       if (res.destroyed) return;
