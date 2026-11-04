@@ -267,16 +267,6 @@ export function SetupChecks() {
           {live.status !== 'live' && <p>{live.status === 'loading' ? 'Starting preview…' : 'Camera preview is off'}</p>}
         </div>
       </div>
-      {/* The live-pose hook plays the camera stream into this element; without
-          it the camera can never start ("video element not ready"). Doubling as
-          a preview so the person can frame themselves. */}
-      <video
-        ref={live.videoRef}
-        className="calibration-preview"
-        muted
-        playsInline
-        aria-label="Setup checks camera preview"
-      />
       <SetupCheckList results={results} blocked={blocked} onStart={start} onContinueAnyway={continued} />
     </div>
   );
