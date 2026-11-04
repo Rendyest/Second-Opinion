@@ -15,7 +15,7 @@ Both groups are equally important.
 
 ## Product Purpose
 
-Mirra Call provides accessible, personalized, AI-assisted rehabilitation coaching through real-time computer vision and movement analysis. The current milestone is a functional demo for the Meta Global AI Developer Hackathon. Coaching supports exercise practice alongside professional guidance. Present feedback as coaching and avoid diagnostic claims.
+Second Opinion provides accessible, personalized, AI-assisted rehabilitation coaching through real-time computer vision and movement analysis. The current milestone is a functional demo for the Meta Global AI Developer Hackathon. Coaching supports exercise practice alongside professional guidance. Present feedback as coaching and avoid diagnostic claims.
 
 ## Positioning
 
@@ -34,7 +34,7 @@ The webcam and MediaPipe pipeline track movement, joint angles, and exercise pro
 
 ## Brand Commitments
 
-Use the Mirra Call name. The confirmed design direction is a sophisticated, modern rehabilitation platform with a calm healthcare aesthetic, intuitive workflows, responsive layouts, accessible typography, and clear visual feedback. Use simple, encouraging language in participant sessions.
+Use the Second Opinion name. The confirmed design direction is a sophisticated, modern rehabilitation platform with a calm healthcare aesthetic, intuitive workflows, responsive layouts, accessible typography, and clear visual feedback. Use simple, encouraging language in participant sessions.
 
 ## Evidence on Hand
 

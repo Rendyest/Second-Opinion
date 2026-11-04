@@ -5,12 +5,12 @@ export function AppNav() {
     <header className="app-header">
       <a className="skip-link" href="#main-content">Skip to content</a>
       <div className="header-inner">
-        <NavLink className="brand" to="/setup" aria-label="Mirra Call home">
+        <NavLink className="brand" to="/setup" aria-label="Second Opinion home">
           <svg aria-hidden="true" viewBox="0 0 40 40" width="40" height="40">
             <rect width="40" height="40" rx="11" fill="currentColor" />
             <path d="M8 22h7l4-9 4 14 4-7h5" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span><strong>Mirra Call</strong><small>Rehabilitation coaching</small></span>
+          <span><strong>Second Opinion</strong><small>Rehabilitation coaching</small></span>
         </NavLink>
         <nav aria-label="Primary">
           <ul className="nav-list">
