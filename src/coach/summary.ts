@@ -145,7 +145,7 @@ export type FetchImpl = (input: string, init?: RequestInit) => Promise<Response>
  */
 export async function requestCoachMessage(
   summary: CoachSummary,
-  deps: { fetchImpl?: FetchImpl; timeoutMs: number },
+  deps: { fetchImpl?: FetchImpl; timeoutMs: number; signal?: AbortSignal },
 ): Promise<{ ok: true; message: string } | { ok: false }> {
   try {
     const controller = new AbortController();
@@ -155,13 +155,13 @@ export async function requestCoachMessage(
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(summary),
-        signal: controller.signal,
+        signal: deps.signal ? AbortSignal.any([deps.signal, controller.signal]) : controller.signal,
       });
       if (!res.ok) return { ok: false };
       const data = (await res.json()) as unknown;
       if (typeof data !== 'object' || data === null) return { ok: false };
       const message = (data as { message?: unknown }).message;
-      if (typeof message !== 'string' || message.length === 0) return { ok: false };
+      if (typeof message !== 'string' || message.trim().length === 0) return { ok: false };
       return { ok: true, message };
     } finally {
       clearTimeout(timer);

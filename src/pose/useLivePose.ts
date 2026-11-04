@@ -15,7 +15,7 @@ import {
   type GateThresholds,
 } from './gate';
 import { loadCalibrationState } from './calibration';
-import { canUseCamera, loadConsent } from '../consent/consent';
+import { canUseCamera, loadConsent, subscribeCameraWithdrawal } from '../consent/consent';
 import { CONSENT_CAMERA_NEED } from '../consentCopy';
 /**
  * Where the model file is loaded from (the only runtime network calls this
@@ -40,9 +40,16 @@ export interface LivePose {
   error: string | null;
   /** Latest pose_frame in the SAME contract as the mock stream. */
   frame: PoseFrame | null;
+  trackingLost: boolean;
   fps: number;
   start: () => void;
   stop: () => void;
+}
+
+interface CameraRun {
+  landmarker?: PoseLandmarker;
+  stream?: MediaStream;
+  video?: HTMLVideoElement;
 }
 
 function sameBaseline(a: BoneBaseline | null, b: BoneBaseline | null): boolean {
@@ -96,7 +103,7 @@ function buildGateDetails(
 
 export function useLivePose(): LivePose {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const landmarkerRef = useRef<PoseLandmarker | null>(null);
+  const runRef = useRef<CameraRun | null>(null);
   const rafRef = useRef(0);
   const lastTRef = useRef(0);
   const lastEmitRef = useRef(0);
@@ -108,6 +115,7 @@ export function useLivePose(): LivePose {
   const [status, setStatus] = useState<LiveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<PoseFrame | null>(null);
+  const [trackingLost, setTrackingLost] = useState(false);
   const [fps, setFps] = useState(0);
 
   // Reviewer routes read pipeline status from here; participant routes never do.
@@ -116,19 +124,20 @@ export function useLivePose(): LivePose {
   }, [status, fps]);
 
   const stop = useCallback(() => {
+    const run = runRef.current;
+    runRef.current = null;
     cancelAnimationFrame(rafRef.current);
-    const video = videoRef.current;
-    if (video?.srcObject) {
-      for (const track of (video.srcObject as MediaStream).getTracks()) track.stop();
-      video.srcObject = null;
+    if (run) {
+      if (run.video && run.video.srcObject === run.stream) run.video.srcObject = null;
+      run.stream?.getTracks().forEach((track) => track.stop());
+      run.landmarker?.close();
     }
-    landmarkerRef.current?.close();
-    landmarkerRef.current = null;
     gateTrackerRef.current.reset();
     gateBaselineRef.current = null;
     publishGateDetails(null);
     if (aliveRef.current) {
       setFrame(null);
+      setTrackingLost(false);
       setFps(0);
       setStatus('idle');
     }
@@ -136,13 +145,18 @@ export function useLivePose(): LivePose {
 
   useEffect(() => {
     aliveRef.current = true;
+    const unsubscribe = subscribeCameraWithdrawal(() => {
+      if (runRef.current) stop();
+    });
     return () => {
+      unsubscribe();
       aliveRef.current = false;
       stop();
     };
   }, [stop]);
 
   const start = useCallback(() => {
+    if (!aliveRef.current || runRef.current) return;
     // Consent is enforced here, not just in the checkboxes: without the
     // camera choice the camera never starts. Ticking it never starts the
     // camera by itself — the person still presses "Turn on camera".
@@ -157,51 +171,61 @@ export function useLivePose(): LivePose {
     }
     setStatus('loading');
     setError(null);
+    const run: CameraRun = {};
+    runRef.current = run;
+    const isCurrent = () => runRef.current === run;
 
     (async () => {
       try {
         let landmarker: PoseLandmarker;
         try {
           const vision = await import('@mediapipe/tasks-vision');
+          if (!isCurrent()) return;
           const resolver = await vision.FilesetResolver.forVisionTasks(VISION_WASM_URL);
+          if (!isCurrent()) return;
           landmarker = await vision.PoseLandmarker.createFromOptions(resolver, {
             baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: 'GPU' },
             runningMode: 'VIDEO',
             numPoses: 1,
           });
         } catch {
-          if (!aliveRef.current) return;
+          if (!isCurrent()) return;
+          stop();
           setStatus('error');
           setError(OFFLINE_MESSAGE);
           return;
         }
+        if (!isCurrent()) {
+          landmarker.close();
+          return;
+        }
+        run.landmarker = landmarker;
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         });
-        if (!aliveRef.current) {
+        if (!isCurrent()) {
           for (const track of stream.getTracks()) track.stop();
-          landmarker.close();
           return;
         }
+        run.stream = stream;
         const video = videoRef.current;
-        if (!video) {
-          for (const track of stream.getTracks()) track.stop();
-          landmarker.close();
-          throw new Error('video element not ready');
-        }
+        if (!video) throw new Error('video element not ready');
+        run.video = video;
         video.srcObject = stream;
         await video.play();
-        landmarkerRef.current = landmarker;
+        if (!isCurrent()) return;
         setStatus('live');
         lastTRef.current = performance.now();
         lastEmitRef.current = 0;
+        lastGatePublishRef.current = 0;
+        fpsRef.current = 0;
+        let lost = false;
 
         const loop = () => {
+          if (!isCurrent()) return;
           rafRef.current = requestAnimationFrame(loop);
-          const lm = landmarkerRef.current;
-          const vd = videoRef.current;
-          if (!lm || !vd || vd.readyState < 2) return;
+          if (video.readyState < 2) return;
           const now = performance.now();
           const dt = now - lastTRef.current;
           lastTRef.current = now;
@@ -212,11 +236,23 @@ export function useLivePose(): LivePose {
           }
           // Emit at most ui.live_emit_hz: the UI must not compete with inference.
           if (now - lastEmitRef.current < 1000 / config.ui.live_emit_hz) return;
-          const res = lm.detectForVideo(vd, now);
-          const points = res.landmarks?.[0];
-          if (!points) return; // nobody in view: hold the last frame
           lastEmitRef.current = now;
-          const nextFrame = buildPoseFrame(points, vd.currentTime, Math.round(fpsRef.current));
+          const points = landmarker.detectForVideo(video, now).landmarks?.[0];
+          if (!points?.length) {
+            if (!lost) {
+              lost = true;
+              setFrame(null);
+              setTrackingLost(true);
+              gateTrackerRef.current.reset();
+              publishGateDetails(null);
+            }
+            return;
+          }
+          if (lost) {
+            lost = false;
+            setTrackingLost(false);
+          }
+          const nextFrame = buildPoseFrame(points, video.currentTime, Math.round(fpsRef.current));
           const baseline = loadCalibrationState().baseline;
           const gateTracker = gateTrackerRef.current;
           if (!sameBaseline(gateBaselineRef.current, baseline)) {
@@ -236,15 +272,14 @@ export function useLivePose(): LivePose {
         };
         rafRef.current = requestAnimationFrame(loop);
       } catch (e: unknown) {
-        if (!aliveRef.current) return;
-        landmarkerRef.current?.close();
-        landmarkerRef.current = null;
+        if (!isCurrent()) return;
+        stop();
         const mapped = cameraErrorMessage(e);
         setStatus(mapped.status);
         setError(mapped.message);
       }
     })();
-  }, []);
+  }, [stop]);
 
-  return { videoRef, status, error, frame, fps, start, stop };
+  return { videoRef, status, error, frame, trackingLost, fps, start, stop };
 }

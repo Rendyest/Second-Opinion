@@ -280,8 +280,8 @@ export function evaluateSetupChecks(
     fix: calibrationPass
       ? null
       : !m.armCalibrated
-        ? 'Finish the arm step below, or continue without it.'
-        : 'Finish the face step below, or continue without it.',
+        ? 'Complete the arm step, or continue without it.'
+        : 'Finish the face step above, or continue without it.',
   });
 
   return results;

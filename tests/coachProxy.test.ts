@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createServer as createViteServer } from 'vite';
+import { requestCoachMessage, type CoachSummary } from '../src/coach/summary';
 import { validateCoachSummary } from '../server/validate.mjs';
 import { createCoachServer } from '../server/proxy.mjs';
 
-const GOOD_BODY = {
+const GOOD_BODY: CoachSummary = {
   task: 'wash your face with the cloth',
   angles: { r_elbow_flexion: { min: 80, max: 100, mean: 90 } },
   duration_s: 2,
@@ -10,6 +12,23 @@ const GOOD_BODY = {
   held_s: 0,
   system1: { state: 'hesitating', top_signal: 'stall' },
 };
+
+function museResponse(cue: string) {
+  return {
+    status: 'completed',
+    output: [
+      { type: 'reasoning' },
+      { type: 'message', content: [{ type: 'output_text', text: JSON.stringify({
+        struggling: true, signal: 'timing', body_part: 'arm', severity: 'mild',
+        cue_text: cue, ask_pain_check: false, safety_concern: false,
+      }) }] },
+    ],
+  };
+}
+
+function readObservations(input: string): unknown {
+  return JSON.parse(input.split('Movement observations:\n')[1]);
+}
 
 describe('validateCoachSummary', () => {
   it('accepts the aggregate summary shape', () => {
@@ -79,16 +98,78 @@ async function postJson(url: string, body: unknown): Promise<{ status: number; j
 }
 
 describe('coach proxy', () => {
+  it('forwards the TypeScript client through the Vite route without browser credentials', async () => {
+    const upstream = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(museResponse('Take your time.')),
+    );
+    const server = createCoachServer({
+      apiKey: 'server-only-stub-key', timeoutMs: 1000, cooldownMs: 0,
+      maxReplyChars: 300, fetchImpl: upstream,
+    });
+    const proxyUrl = new URL(await listen(server));
+    vi.stubEnv('COACH_PORT', proxyUrl.port);
+    const vite = await createViteServer({
+      server: { host: '127.0.0.1', port: 0, hmr: false, watch: null },
+    });
+    try {
+      await vite.listen();
+      const address = vite.httpServer?.address();
+      if (!address || typeof address === 'string') throw new Error('Vite did not start');
+      const clientFetch = vi.fn((input: string, init?: RequestInit) =>
+        fetch(`http://127.0.0.1:${address.port}${input}`, init));
+      const result = await requestCoachMessage(GOOD_BODY, { fetchImpl: clientFetch, timeoutMs: 2000 });
+      expect(result).toEqual({ ok: true, message: 'Take your time.' });
+      expect(clientFetch).toHaveBeenCalledOnce();
+      expect(clientFetch.mock.calls[0][0]).toBe('/api/coach');
+      expect(new Headers(clientFetch.mock.calls[0][1]?.headers).has('authorization')).toBe(false);
+      expect(JSON.parse(String(clientFetch.mock.calls[0][1]?.body))).toEqual(GOOD_BODY);
+      expect(upstream).toHaveBeenCalledOnce();
+      const [url, init] = upstream.mock.calls[0];
+      expect(url).toBe('https://api.meta.ai/v1/responses');
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer server-only-stub-key');
+      expect(init?.body).not.toContain('server-only-stub-key');
+    } finally {
+      await vite.close();
+      vi.unstubAllEnvs();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 15_000);
+
+  it.each([
+    [429, () => Promise.resolve(new Response(null, { status: 429 }))],
+    [502, () => Promise.resolve(Response.json({ ...museResponse('Wait.'), status: 'incomplete' }))],
+    [502, () => Promise.resolve(Response.json({ status: 'completed', output: [
+      { type: 'message', content: [{ type: 'output_text', text: '{"cue_text":"Wait."}' }] },
+    ] }))],
+    [502, () => Promise.reject(new Error('Network error'))],
+    [504, (_url, init) => new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+    })],
+  ] satisfies Array<[number, typeof fetch]>)('handles upstream failure as HTTP %i', async (status, fetchImpl) => {
+    const server = createCoachServer({
+      apiKey: 'stub', timeoutMs: 50, cooldownMs: 0, maxReplyChars: 200, fetchImpl,
+    });
+    const url = await listen(server);
+    try {
+      expect((await postJson(url, GOOD_BODY)).status).toBe(status);
+      const result = await requestCoachMessage(GOOD_BODY, {
+        fetchImpl: (input, init) => fetch(url + input, init), timeoutMs: 1000,
+      });
+      expect(result).toEqual({ ok: false });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it('forwards a valid summary and returns the message', async () => {
     const server = createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 60000,
       maxReplyChars: 300,
       fetchImpl: (async () => ({
         ok: true,
-        json: async () => ({ message: 'Take your time.' }),
+        json: async () => museResponse('Take your time.'),
       })) as unknown as typeof fetch,
     });
     const url = await listen(server);
@@ -105,13 +186,12 @@ describe('coach proxy', () => {
     let upstreamCalls = 0;
     const server = createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 60000,
       maxReplyChars: 300,
       fetchImpl: (async () => {
         upstreamCalls += 1;
-        return { ok: true, json: async () => ({ message: 'hi' }) };
+        return { ok: true, json: async () => museResponse('hi') };
       }) as unknown as typeof fetch,
     });
     const url = await listen(server);
@@ -129,26 +209,28 @@ describe('coach proxy', () => {
     let sentBody = '';
     const server = createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 60000,
       maxReplyChars: 300,
       fetchImpl: (async (_url: unknown, init?: { body?: unknown }) => {
         sentBody = String(init?.body ?? '');
-        return { ok: true, json: async () => ({ message: 'Take your time.' }) };
+        return { ok: true, json: async () => museResponse('Take your time.') };
       }) as unknown as typeof fetch,
     });
     const url = await listen(server);
     try {
       expect((await postJson(url, GOOD_BODY)).status).toBe(200);
       const upstream = JSON.parse(sentBody) as Record<string, unknown>;
-      expect(Object.keys(upstream).sort()).toEqual(['instruction', 'summary']);
-      expect(upstream['summary']).toEqual({
+      expect(upstream).toEqual({
+        model: 'muse-spark-1.3',
+        input: expect.stringContaining('ONE small adjustment'),
+        reasoning: { effort: 'low' },
+        max_output_tokens: 1200,
+      });
+      expect(readObservations(upstream.input as string)).toEqual({
         ...GOOD_BODY,
         system1: { state: 'hesitating', top_signal: 'paused' },
       });
-      expect(typeof upstream['instruction']).toBe('string');
-      expect(upstream['instruction'] as string).toContain('ONE small adjustment');
       expect(sentBody).not.toMatch(/data:|base64/i);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -158,13 +240,12 @@ describe('coach proxy', () => {
   it('cools down after a proxied call', async () => {
     const server = createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 60000,
       maxReplyChars: 300,
       fetchImpl: (async () => ({
         ok: true,
-        json: async () => ({ message: 'Take your time.' }),
+        json: async () => museResponse('Take your time.'),
       })) as unknown as typeof fetch,
     });
     const url = await listen(server);
@@ -179,13 +260,12 @@ describe('coach proxy', () => {
   function guardedServer(reply: string) {
     return createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 0,
       maxReplyChars: 300,
       fetchImpl: (async () => ({
         ok: true,
-        json: async () => ({ message: reply }),
+        json: async () => museResponse(reply),
       })) as unknown as typeof fetch,
     });
   }
@@ -215,21 +295,20 @@ describe('coach proxy', () => {
     let sentBody = '';
     const server = createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 0,
       maxReplyChars: 300,
       fetchImpl: (async (_url: unknown, init?: { body?: unknown }) => {
         sentBody = String(init?.body ?? '');
-        return { ok: true, json: async () => ({ message: 'Take your time.' }) };
+        return { ok: true, json: async () => museResponse('Take your time.') };
       }) as unknown as typeof fetch,
     });
     const url = await listen(server);
     try {
       const body = { ...GOOD_BODY, system1: { state: 'hesitating', top_signal: 'stall' } };
       expect((await postJson(url, body)).status).toBe(200);
-      const upstream = JSON.parse(sentBody) as { summary: { system1: { top_signal: string } } };
-      expect(upstream.summary.system1.top_signal).toBe('paused');
+      const upstream = readObservations(JSON.parse(sentBody).input) as { system1: { top_signal: string } };
+      expect(upstream.system1.top_signal).toBe('paused');
       expect(sentBody).not.toContain('stall');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -240,21 +319,20 @@ describe('coach proxy', () => {
     let sentBody = '';
     const server = createCoachServer({
       apiKey: 'test-key',
-      baseUrl: 'https://coach.example/v1',
       timeoutMs: 5000,
       cooldownMs: 0,
       maxReplyChars: 300,
       fetchImpl: (async (_url: unknown, init?: { body?: unknown }) => {
         sentBody = String(init?.body ?? '');
-        return { ok: true, json: async () => ({ message: 'Take your time.' }) };
+        return { ok: true, json: async () => museResponse('Take your time.') };
       }) as unknown as typeof fetch,
     });
     const url = await listen(server);
     try {
       const body = { ...GOOD_BODY, system1: { state: 'struggling', top_signal: 'drop' } };
       expect((await postJson(url, body)).status).toBe(200);
-      const upstream = JSON.parse(sentBody) as { summary: { system1: { top_signal: string } } };
-      expect(upstream.summary.system1.top_signal).toBe('arm lowering');
+      const upstream = readObservations(JSON.parse(sentBody).input) as { system1: { top_signal: string } };
+      expect(upstream.system1.top_signal).toBe('arm lowering');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

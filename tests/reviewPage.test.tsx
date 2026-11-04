@@ -5,7 +5,8 @@ import { AppNav } from '../src/components/AppNav';
 import { MockStreamContext } from '../src/mock/MockStreamContext';
 import { buildClip } from '../src/pipeline/clip';
 import { reviewClipFromRecorded } from '../src/pipeline/clip';
-import type { ReviewClip } from '../src/contracts';
+import { parseReviewBundle, type ReviewClip } from '../src/contracts';
+import { clearLoadedBundle, setLoadedBundle } from '../src/review/store';
 import type { StoredReview } from '../src/review/labels';
 import { buildQueueRows, ReviewQueue } from '../src/components/ReviewQueue';
 import { ReviewCard } from '../src/components/ReviewCard';
@@ -38,6 +39,7 @@ function stubStorage(preset: Record<string, string> = {}): Map<string, string> {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearLoadedBundle();
 });
 
 const MUSE = {
@@ -79,6 +81,17 @@ function clipFixture(id: string, withMuse = true): ReviewClip {
     ...(withMuse ? { muse: { ...MUSE } } : {}),
   };
 }
+
+it.each([
+  ['recorded', 'Source: Recorded'],
+  ['imported_video', 'Source: Imported video'],
+  ['synthetic', 'Source: Synthetic fixture (simulated data)'],
+] as const)('preserves and renders %s provenance for loaded clips', (source, label) => {
+  const bundle = parseReviewBundle({ version: 1, source, clips: [clipFixture('clip-aaaa')] });
+  expect(bundle.source).toBe(source);
+  setLoadedBundle(bundle);
+  expect(renderToStaticMarkup(<ReviewPage />)).toContain(label);
+});
 
 function storedReview(over: Partial<StoredReview> = {}): StoredReview {
   return {
@@ -281,8 +294,8 @@ describe('review page', () => {
   });
 });
 
-describe('review nav gating', () => {
-  it('hides the Review link unless dev controls are on', () => {
+describe('review navigation', () => {
+  it('shows Review without requiring developer controls or replay', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MockStreamContext.Provider
@@ -295,6 +308,6 @@ describe('review nav gating', () => {
     expect(html).toContain('Setup');
     expect(html).toContain('Session');
     expect(html).toContain('Metrics');
-    expect(html).not.toContain('href="/review"');
+    expect(html).toContain('href="/review"');
   });
 });

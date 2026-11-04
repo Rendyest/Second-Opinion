@@ -28,7 +28,8 @@ describe('judge demo data', () => {
     expect(results).not.toBeNull();
     if (!results) throw new Error('unreachable');
     expect(results.recordedSet.n_clips).toBe(3);
-    expect(results.recordedSet.n_participants).toBe(3);
+    expect(results.provenance).toBe('synthetic');
+    expect(results.recordedSet.n_participants).toBe(0);
     expect(results.shoulder).toHaveLength(3);
     for (const row of results.shoulder) {
       expect(row.n_all).toBeGreaterThan(0);

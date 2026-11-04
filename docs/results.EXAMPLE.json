@@ -1,12 +1,13 @@
 {
   "_example": "NOT REAL DATA",
   "schemaVersion": 1,
+  "provenance": "synthetic",
   "generatedAt": "2099-01-01T00:00:00.000Z",
   "reference": "Posed target angle (nominal)",
   "thresholds_tuned_on_reported_clips": false,
   "recordedSet": {
     "n_clips": 99,
-    "n_participants": 99,
+    "n_participants": 0,
     "n_frames_in_hold": 9999,
     "n_frames_outside_hold": 9999,
     "n_unlabelled_frames": 9999

@@ -115,7 +115,7 @@ export const STATUS_TIPS_OFF = 'Tips off';
 
 export const PAUSE_LABEL = 'Pause';
 export const RESUME_LABEL = 'Resume';
-export const PAUSED_NOTE = 'Paused';
+export const PAUSED_NOTE = 'Session paused. The camera preview stays on.';
 
 export const FINISH_LABEL = 'Finish session';
 export const FINISH_CONFIRM = 'Finish and stop the camera? Your recording stays in this browser until you download it.';

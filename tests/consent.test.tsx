@@ -274,7 +274,7 @@ describe('delete my clips', () => {
 
     const html = renderToStaticMarkup(<DeleteMyClips />);
     expect(html).toContain('Delete my clips');
-    expect(html).toContain('Delete recordings, saved measurements and any loaded review clips');
+    expect(html).toContain('Delete recordings, session metrics, saved measurements and any loaded review clips');
 
     // The confirmed path: buffers plus calibration and face data go away.
     const buffer = new ClipBuffer();
@@ -311,10 +311,10 @@ describe('session controls', () => {
         liveFrame={null}
         cameraOn={false}
         consent={{ ...OFF }}
-        paused={false}
+        phase="ready"
         onPause={() => {}}
         onResume={() => {}}
-        onStopCamera={() => {}}
+        onFinish={() => {}}
         calibration={{ baseline: null, skipped: false, face: null, faceSkipped: false }}
         {...extra}
       />,
@@ -323,7 +323,7 @@ describe('session controls', () => {
 
   it('status area always shows camera, recording and tips as text', () => {
     const html = renderToStaticMarkup(
-      <SessionStatus cameraOn={false} recording={false} tipsOn={false} paused={false} />,
+      <SessionStatus cameraOn={false} recording={false} tipsOn={false} phase="ready" />,
     );
     expect(html).toContain('Camera off');
     expect(html).toContain('Recording off');
@@ -333,17 +333,17 @@ describe('session controls', () => {
 
   it('status area marks an active recording unmistakably', () => {
     const html = renderToStaticMarkup(
-      <SessionStatus cameraOn recording tipsOn={false} paused={false} />,
+      <SessionStatus cameraOn recording tipsOn={false} phase="running" />,
     );
     expect(html).toContain('Recording on');
     expect(html).toContain('Camera on');
   });
 
-  it('idle controls show pause, not-recording mark and finish with no digits or banned words', () => {
+  it('idle controls keep exercise actions unavailable before start', () => {
     const html = controls();
-    expect(html).toContain('Pause');
+    expect(html).not.toContain('Pause');
     expect(html).toContain('Not recording');
-    expect(html).toContain('Finish session');
+    expect(html.split('<dialog')[0]).not.toContain('Finish session');
     expect(html).not.toContain('Stop recording now');
     expect(html).not.toContain('Download clip');
     const text = stripTags(html);

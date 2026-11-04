@@ -8,7 +8,7 @@ interface SourceSwitchProps {
 /** Mock/live switch. Real radio inputs: keyboard-operable with no extra code. */
 export function SourceSwitch({ value, onChange }: SourceSwitchProps) {
   return (
-    <fieldset>
+    <fieldset className="picture-source-switch">
       <legend>Picture source</legend>
       <label>
         <input

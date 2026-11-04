@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
 import { useMockStream } from '../mock/MockStreamContext';
 
 /** Transport for the mock replay stream. Keyboard-operable native buttons. */
-export function MockTransport() {
+export function MockTransport({ trailingActions }: { trailingActions?: ReactNode }) {
   const { status, error, player, snapshot } = useMockStream();
 
   if (status === 'loading') return <p>Loading mock stream…</p>;
@@ -31,6 +32,11 @@ export function MockTransport() {
         <button type="button" onClick={() => player.reset()} disabled={snapshot.cursor === 0 && !snapshot.playing}>
           Reset
         </button>
+        {trailingActions && (
+          <span className="transport-toggles" role="group" aria-label="Stage toggles">
+            {trailingActions}
+          </span>
+        )}
       </div>
       <p aria-live="polite">
         Event {snapshot.cursor} of {snapshot.total}

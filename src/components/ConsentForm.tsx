@@ -48,17 +48,18 @@ export function ConsentForm({ consent, onChange }: Props) {
       {ROWS.map(({ key, label, text }) => {
         const needsRecording = key === 'cloud_clips' && !recordingOn;
         return (
-          <div key={key}>
+          <div className="consent-choice" key={key}>
             <label>
               <input
                 type="checkbox"
                 checked={consent[key]}
                 disabled={needsRecording}
+                aria-describedby={`consent-${key}-description`}
                 onChange={(e) => onChange(key, e.target.checked)}
               />
               {label}
             </label>
-            <p>{text}</p>
+            <p id={`consent-${key}-description`}>{text}</p>
           </div>
         );
       })}

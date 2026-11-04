@@ -21,7 +21,7 @@ export default function App() {
     <BrowserRouter>
       <MockStreamProvider>
         <AppNav />
-        <main>
+        <main id="main-content" tabIndex={-1}>
           <Routes>
             <Route path="/" element={<Navigate to="/setup" replace />} />
             <Route path="/setup" element={<SetupPage />} />

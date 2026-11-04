@@ -309,6 +309,7 @@ describe('session indicator and coach panel', () => {
         cantSeeYouActive={false}
         escalationId={0}
         statsEpoch="test"
+        consent={{ camera: true, recording: false, cloud_summary: true, cloud_clips: false }}
       />,
     );
     expect(html).toContain('Get a tip');
@@ -316,7 +317,7 @@ describe('session indicator and coach panel', () => {
     expect(html).not.toMatch(STAT_TESTID);
   });
 
-  it('says tips are off instead of Get a tip when the summary choice is unticked', () => {
+  it('offers a local tip when the summary choice is unticked', () => {
     const html = renderToStaticMarkup(
       <CoachPanel
         frame={okFrame()}
@@ -328,7 +329,7 @@ describe('session indicator and coach panel', () => {
         consent={{ camera: false, recording: false, cloud_summary: false, cloud_clips: false }}
       />,
     );
-    expect(html).toContain('Tips are off');
+    expect(html).toContain('Get a local tip (cloud coaching off)');
     expect(html).not.toContain('Get a tip');
     expect(html).not.toMatch(BANNED);
     expect(html).not.toMatch(STAT_TESTID);
@@ -452,13 +453,13 @@ describe('session live branch (no camera)', () => {
   it('includes camera controls and stage toggles', () => {
     const html = liveMarkup();
     expect(html).toContain('Start camera');
-    expect(html).toContain('Stop camera');
+    expect(html).not.toContain('Cancel start');
     expect(html).toContain('Skeleton:');
     expect(html).toContain('Mirror:');
   });
 
-  it('names the start button on the black stage in the live branch only', () => {
-    expect(liveMarkup()).toContain('press Start camera below to turn on your camera');
-    expect(sessionMarkup()).not.toContain('press Start camera below');
+  it('names the default stage hint in the live branch only', () => {
+    expect(liveMarkup()).toContain('Camera preview is off');
+    expect(sessionMarkup()).not.toContain('Camera preview is off');
   });
 });

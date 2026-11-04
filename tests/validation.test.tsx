@@ -18,6 +18,7 @@ const BANNED = /\b(fps|frames?|calls?|saved|flag rate|latency|escalat\w*)\b/i;
 function validResults(): ValidationResults {
   return {
     schemaVersion: 1,
+    provenance: 'recorded',
     generatedAt: '2026-01-01T00:00:00.000Z',
     reference: 'Posed target angle (nominal)',
     thresholds_tuned_on_reported_clips: false,
@@ -73,6 +74,24 @@ describe('validation error math', () => {
 });
 
 describe('validation schema', () => {
+  it('rejects unknown provenance labels and synthetic files claiming participants', () => {
+    expect(isValidationResults({ ...validResults(), provenance: 'clinical' })).toBe(false);
+    expect(isValidationResults({ ...validResults(), provenance: 'synthetic' })).toBe(false);
+  });
+
+  it.each(['synthetic', 'mixed', 'imported_video', undefined] as const)(
+    'renders %s provenance without presenting participant counts',
+    (provenance) => {
+      const data = validResults();
+      data.provenance = provenance;
+      if (provenance) data.recordedSet.n_participants = 0;
+      expect(isValidationResults(data)).toBe(true);
+      const html = renderToStaticMarkup(<ValidationResultsView data={data} />);
+      expect(html).toContain('should not be used as real participant evidence');
+      expect(html).not.toContain('Participant identifiers');
+      expect(html).not.toContain('Small recorded set');
+    },
+  );
   it('accepts a complete valid file', () => {
     expect(isValidationResults(validResults())).toBe(true);
   });
@@ -251,7 +270,7 @@ describe('validation generator', () => {
     writeFileSync(join(dir, file), JSON.stringify(clip));
   }
 
-  it('scores in-hold frames, excludes outside-hold frames, and sorts unlabelled and unconsented clips', () => {
+  it.each(['recorded', 'synthetic'] as const)('scores usable frames and classifies the dataset when the side clip is %s', (sideSource) => {
     const dir = mkdtempSync(join(tmpdir(), 'clips-'));
     const out = mkdtempSync(join(tmpdir(), 'results-'));
     // Front clip at target 90: two in-hold frames at elevation 90 (error 0),
@@ -265,6 +284,7 @@ describe('validation generator', () => {
     });
     // Side clip at the same target: its own row, and no elbow scoring.
     writeClip(dir, 'side.json', {
+      source: sideSource,
       name: 'P2',
       view: 'side',
       target_shoulder_deg: 90,
@@ -294,6 +314,7 @@ describe('validation generator', () => {
     expect(text).not.toContain('joints');
     const results = JSON.parse(text) as ValidationResults;
     expect(isValidationResults(results)).toBe(true);
+    expect(results.provenance).toBe(sideSource === 'recorded' ? 'recorded' : 'mixed');
 
     const front = results.shoulder.find((r) => r.view === 'front');
     const side = results.shoulder.find((r) => r.view === 'side');
@@ -310,7 +331,7 @@ describe('validation generator', () => {
     expect(results.elbow.bias_deg_all).toBe(-90);
     expect(results.recordedSet).toEqual({
       n_clips: 2,
-      n_participants: 3,
+      n_participants: sideSource === 'recorded' ? 3 : 0,
       n_frames_in_hold: 3,
       n_frames_outside_hold: 1,
       n_unlabelled_frames: 3,

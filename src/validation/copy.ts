@@ -4,7 +4,7 @@
  * the word "frames" appear here by design and are never shown on /session.
  */
 
-export const VALIDATION_TITLE = 'Validation (judges and reviewers)';
+export const VALIDATION_TITLE = 'Movement validation';
 
 export const VALIDATION_NO_RESULTS = 'No results yet';
 

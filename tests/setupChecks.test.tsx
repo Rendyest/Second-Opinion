@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import { SetupChecks } from '../src/components/SetupChecks';
 import {
   createCheckDebouncer,
   evaluateSetupChecks,
@@ -334,5 +336,25 @@ describe('setup checklist markup', () => {
     const html = list(evaluateSetupChecks(allPass(), T));
     expect(stripTags(html)).not.toMatch(BANNED);
     expect(stripTags(html)).not.toMatch(/\d/);
+  });
+});
+
+describe('setup checks camera element', () => {
+  function setupMarkup(): string {
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <SetupChecks />
+      </MemoryRouter>,
+    );
+  }
+
+  it('renders a camera preview video so live pose can start', () => {
+    expect(setupMarkup()).toContain('<video');
+  });
+
+  it('lays the preview next to the checklist', () => {
+    const html = setupMarkup();
+    expect(html).toContain('setup-check-layout');
+    expect(html).toContain('Setup checks');
   });
 });

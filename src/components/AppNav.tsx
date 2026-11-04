@@ -1,44 +1,37 @@
 import { NavLink } from 'react-router-dom';
-import { useMockStream } from '../mock/MockStreamContext';
-import { config } from '../config';
-
-function streamLabel(status: string, cursor: number, total: number, playing: boolean): string {
-  if (status === 'loading') return 'Mock stream: loading…';
-  if (status === 'error') return 'Mock stream: error';
-  return `Mock stream: ${playing ? 'playing' : 'paused'} (event ${cursor} of ${total})`;
-}
 
 export function AppNav() {
-  const { status, snapshot } = useMockStream();
-  const snap = snapshot ?? { cursor: 0, total: 0, playing: false };
   return (
     <header className="app-header">
-      <p className="app-title">Second Opinion — coaching loop</p>
-      <nav aria-label="Primary">
-        <ul className="nav-list">
-          <li>
-            <NavLink to="/setup">Setup</NavLink>
-          </li>
-          <li>
-            <NavLink to="/session">Session</NavLink>
-          </li>
-          <li>
-            <NavLink to="/metrics">Metrics</NavLink>
-          </li>
-          {config.ui.dev_controls && (
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <div className="header-inner">
+        <NavLink className="brand" to="/setup" aria-label="Mirra Call home">
+          <svg aria-hidden="true" viewBox="0 0 40 40" width="40" height="40">
+            <rect width="40" height="40" rx="11" fill="currentColor" />
+            <path d="M8 22h7l4-9 4 14 4-7h5" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span><strong>Mirra Call</strong><small>Rehabilitation coaching</small></span>
+        </NavLink>
+        <nav aria-label="Primary">
+          <ul className="nav-list">
+            <li>
+              <NavLink to="/setup">Setup</NavLink>
+            </li>
+            <li>
+              <NavLink to="/session">Session</NavLink>
+            </li>
+            <li>
+              <NavLink to="/metrics">Metrics</NavLink>
+            </li>
             <li>
               <NavLink to="/review">Review</NavLink>
             </li>
-          )}
-          <li>
-            <NavLink to="/validation">Validation</NavLink>
-          </li>
-        </ul>
-      </nav>
-      <p className="mock-chip" role="status">
-        {streamLabel(status, snap.cursor, snap.total, snap.playing)}
-      </p>
-      <p className="audience-note">Setup and Session are for the participant. Metrics, Review, Validation are for judges and reviewers.</p>
+            <li>
+              <NavLink to="/validation">Validation</NavLink>
+            </li>
+          </ul>
+        </nav>
+      </div>
     </header>
   );
 }
