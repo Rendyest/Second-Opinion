@@ -11,8 +11,9 @@ towel, with live movement feedback and coaching tips. Participant routes are
 - Web app: React + TypeScript + Vite. Pose estimation runs in a localhost
   Python sidecar (Detectron2 Keypoint R-CNN R50-FPN, Meta FAIR) on
   127.0.0.1 — frames never leave the machine; see "Pose sidecar" below.
-  Offline clip masking (`scripts/mask_clips.py`) uses SAM 3.1 person masks
-  plus an OpenCV YuNet face detector.
+  Offline clip masking (`scripts/mask_clips.py`) uses an OpenCV YuNet face
+  detector today; SAM 3.1 person masks are the wired next step (weights and
+  the `sam3` package not yet installed).
 - Live coaching: with consent, a Node proxy (`server/proxy.mjs`) forwards an
   aggregate movement summary to the Muse Spark Responses API and returns a
   tip. When cloud coaching is disabled or a request fails, the app labels the
@@ -111,6 +112,21 @@ reads "Live tip from Muse Spark." on screen.
 Local tuning lives in gitignored `src/config/config.local.json` (for example
 `{ "gate": { "vis_min": 0.3 } }`); the tip button states its own block reason
 on screen when disabled.
+
+## Model licenses
+
+Our code is MIT. Model weights are never committed — each is placed manually
+and keeps its own license:
+
+- Detectron2 Keypoint R-CNN (pose sidecar): Apache-2.0, Meta FAIR.
+- YuNet face detector (masking weights): MIT (OpenCV Zoo).
+- OpenCV library: Apache-2.0.
+- SAM 3.1 (planned masking backend, not active): Meta SAM License —
+  custom terms with field-of-use restrictions, not OSI-approved; accept
+  its terms if you fetch the gated weights.
+- Sapiens: deliberately unused — CC BY-NC 4.0, incompatible with this
+  MIT release.
+- Muse Spark (cloud tips): proprietary Model API, key-gated (`MODEL_API_KEY`).
 
 ## Recording a real clip and measuring call policies
 
