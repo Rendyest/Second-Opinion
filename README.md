@@ -71,6 +71,41 @@ bundle file; `/validation` reads the generated `results/results.json`. Check
 the plumbing with `npm test -- tests/demoData.test.ts`, which generates into
 a temp folder, validates every output, and scores it.
 
+## Recording a real clip and measuring call policies
+
+Synthetic clips and `?source=mock` must never back reported numbers. For real
+figures, record a clip from the webcam and replay it on `/metrics`:
+
+1. Enable the dev recorder by creating gitignored
+   `src/config/config.local.json` containing
+   `{ "ui": { "dev_controls": true } }`, then restart `npm run dev`.
+2. On `/setup`, tick both the recording consent choice and the face-masked
+   clips choice. Without the first, recording will not start; without the
+   second, download is refused.
+3. On `/metrics`, enter an anonymous label (a code like `P1`, never a name),
+   tick the recorder's own consent checkbox, and press **Start recording**.
+   Optionally use **Mark struggle start/end** around the hard part — those
+   labels power the needed-help coverage rows. Recording caps at 120 seconds
+   and stores landmark numbers only, never video or images.
+4. Press **Stop recording**, then **Download clip** (`<label>.clip.json`,
+   `source: "recorded"`). Calibrate beforehand if you want a calibrated
+   replay. An existing video file can be converted instead via the importer
+   below the recorder.
+5. In the Replay workspace use **Choose a clip file** with that file (not
+   "Replay synthetic fixture"). Take calls-made per policy (`every_frame`,
+   `fixed_interval` at the 2 s default, `gated_trigger`) and calls-saved
+   against the baselines from the Loop comparison, then **Download results
+   (JSON)** and **(CSV)**.
+6. System 2 latency is not in that export by design (the replay never calls
+   the cloud model). Time real `/session` cloud calls instead — DevTools
+   Network on `POST /api/coach`, or the proxy log — with the proxy running.
+   Each tip costs one billed call and the 60 s cooldown spaces them out, so
+   with only a handful of calls report the median and the count rather than
+   a p95.
+
+Keep exported files and screenshots out of `results/` (gitignored build
+output): save them elsewhere and never overwrite `results/results.json`.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). Copyright (c) 2026 Rendyest.
