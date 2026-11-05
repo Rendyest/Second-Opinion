@@ -89,6 +89,19 @@ describe('right-arm highlight', () => {
   });
 });
 
+describe('hidden joints', () => {
+  it('leaves ear landmarks out of the draw list', () => {
+    const f = frame();
+    f.joints['l_ear'] = { x: 0.4, y: 0.25, conf: 0.9 };
+    f.joints['r_ear'] = { x: 0.6, y: 0.25, conf: 0.9 };
+    const { joints, segments } = drawList(f, THRESHOLD);
+    expect(joints.find((j) => j.name === 'l_ear')).toBeUndefined();
+    expect(joints.find((j) => j.name === 'r_ear')).toBeUndefined();
+    expect(joints).toHaveLength(3);
+    expect(segments).toHaveLength(2);
+  });
+});
+
 describe('drawList stability', () => {
   it('returns the same joints when no new event arrives', () => {
     const f = frame();

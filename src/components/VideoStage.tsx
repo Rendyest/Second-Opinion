@@ -49,8 +49,16 @@ export interface DrawableSegment {
 const RIGHT_ARM_JOINTS: ReadonlySet<string> = new Set(['r_shoulder', 'r_elbow', 'r_wrist']);
 
 /**
+ * Joints never drawn: ear landmarks carry no task signal. Display-only —
+ * the joints stay in the frame contract for the gate, calibration, and
+ * recorded clips.
+ */
+const HIDDEN_JOINTS: ReadonlySet<string> = new Set(['l_ear', 'r_ear']);
+
+/**
  * Everything the overlay draws, with low-confidence flags attached. Joints
- * are never dropped here — weak ones are dimmed/dashed by the caller.
+ * are never dropped here — weak ones are dimmed/dashed by the caller —
+ * except the hidden set above.
  * Segments need both endpoints, so a segment is skipped only when a joint
  * is entirely absent; the joints themselves are still listed.
  */
@@ -58,7 +66,9 @@ export function drawList(
   frame: PoseFrame,
   dimBelowConf: number,
 ): { joints: DrawableJoint[]; segments: DrawableSegment[] } {
-  const joints = Object.entries(frame.joints).map(([name, joint]) => ({
+  const joints = Object.entries(frame.joints)
+    .filter(([name]) => !HIDDEN_JOINTS.has(name))
+    .map(([name, joint]) => ({
     name,
     joint,
     weak: isLowConfidence(joint.conf, dimBelowConf),
