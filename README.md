@@ -1,5 +1,7 @@
 # Second Opinion — webcam coaching demo
 
+*Created for Meta AI Hackathon*
+
 A webcam demo that guides a participant through washing their face with a face
 towel, with live movement feedback and coaching tips. Participant routes are
 `/setup` (consent, camera checks, arm and face calibration) and `/session`
